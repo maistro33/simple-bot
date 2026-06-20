@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SADIK SIMPLE BOT v1 — Basit Trend + Momentum
+SADIK SIMPLE BOT v2 — Basit Trend + Momentum
 Paper Trading — AI karşılaştırma için
 """
 
@@ -24,10 +24,11 @@ SUPA_KEY   = os.getenv("SUPABASE_KEY","")
 LEVERAGE      = 5
 MARGIN        = 10.0
 TP_PCT        = 0.015   # %1.5
-SL_PCT        = 0.010   # %1.0 — küçük kayıp
+SL_PCT        = 0.010   # %1.0
 MAX_OPEN      = 5
+MAX_OPEN_NEUTRAL = 2    # BTC NEUTRAL'da max 2 pozisyon
 SCAN_INTERVAL = 30
-MIN_QUOTE_VOL = 3_000_000
+MIN_QUOTE_VOL = 2_000_000  # 3M'den 2M'ye düşürüldü
 MAX_PRICE     = 30
 
 BLACKLIST = {
@@ -122,10 +123,10 @@ def calc_indicators(symbol):
 
         # Son 3 bar aynı yönde mi?
         last3  = [float(c.iloc[-i]) > float(c.iloc[-i-1]) for i in range(1,4)]
-        bars_up   = all(last3)      # 3 bar üst üste yeşil
-        bars_down = not any(last3)  # 3 bar üst üste kırmızı
+        bars_up   = all(last3)
+        bars_down = not any(last3)
 
-        # Hacim artıyor mu?
+        # Hacim
         vol_avg   = float(v.rolling(10).mean().iloc[-1])
         vol_ratio = float(v.iloc[-1]) / max(vol_avg, 0.001)
 
@@ -149,20 +150,26 @@ def get_signal(ind, btc_trend):
     rsi = ind["rsi"]
 
     if rsi < 45 or rsi > 70: return None
-    if ind["vol_ratio"] < 1.0: return None
+    if ind["vol_ratio"] < 0.8: return None  # 1.0'dan 0.8'e düşürüldü
 
-    # LONG — BTC UP + EMA yukarı + 3 bar yeşil
-    if (btc_trend == "UP"
+    # LONG
+    if (btc_trend in ["UP", "NEUTRAL"]
             and ind["ema9"] > ind["ema20"]
             and ind["bars_up"]
-            and ind["move_3"] > 0.2):
+            and ind["move_3"] > 0.1):  # 0.2'den 0.1'e düşürüldü
+        # NEUTRAL'da sadece güçlü sinyaller
+        if btc_trend == "NEUTRAL" and ind["move_3"] < 0.3:
+            return None
         return "LONG"
 
-    # SHORT — BTC DOWN + EMA aşağı + 3 bar kırmızı
-    if (btc_trend == "DOWN"
+    # SHORT
+    if (btc_trend in ["DOWN", "NEUTRAL"]
             and ind["ema9"] < ind["ema20"]
             and ind["bars_down"]
-            and ind["move_3"] < -0.2):
+            and ind["move_3"] < -0.1):  # -0.2'den -0.1'e düşürüldü
+        # NEUTRAL'da sadece güçlü sinyaller
+        if btc_trend == "NEUTRAL" and ind["move_3"] > -0.3:
+            return None
         return "SHORT"
 
     return None
@@ -171,6 +178,8 @@ def get_signal(ind, btc_trend):
 def open_paper(symbol, signal, ind, btc_trend):
     with pos_lock:
         if symbol in positions: return
+        # NEUTRAL'da max 2 pozisyon
+        if btc_trend == "NEUTRAL" and len(positions) >= MAX_OPEN_NEUTRAL: return
         if len(positions) >= MAX_OPEN: return
 
     price = ind["price"]
@@ -258,12 +267,11 @@ def scanner_loop():
     while True:
         try:
             with pos_lock:
-                if len(positions) >= MAX_OPEN:
+                open_count = len(positions)
+                if open_count >= MAX_OPEN:
                     time.sleep(10); continue
 
             btc_trend = get_btc_trend()
-            if btc_trend == "NEUTRAL":
-                time.sleep(SCAN_INTERVAL); continue
 
             tickers = safe_api(exchange.fetch_tickers)
             if not tickers:
@@ -278,7 +286,7 @@ def scanner_loop():
                 price = ticker.get("last", 0) or 0
                 if price > MAX_PRICE: continue
                 pct = abs(ticker.get("percentage", 0) or 0)
-                if pct < 0.3: continue
+                if pct < 0.2: continue  # 0.3'ten 0.2'ye düşürüldü
                 active.append(symbol)
 
             print(f"[SIMPLE SCAN] {len(active)} coin | BTC:{btc_trend}")
@@ -286,6 +294,7 @@ def scanner_loop():
             for symbol in active[:60]:
                 with pos_lock:
                     if symbol in positions: continue
+                    if btc_trend == "NEUTRAL" and len(positions) >= MAX_OPEN_NEUTRAL: break
                     if len(positions) >= MAX_OPEN: break
 
                 ind = calc_indicators(symbol)
@@ -338,17 +347,19 @@ def cmd_stats(msg):
 
 # ─── MAIN ───
 if __name__ == "__main__":
-    print("🟢 SADIK SIMPLE BOT v1 BAŞLIYOR...")
+    print("🟢 SADIK SIMPLE BOT v2 BAŞLIYOR...")
     threading.Thread(target=health_server, daemon=True).start()
     threading.Thread(target=manage_loop,   daemon=True).start()
     threading.Thread(target=scanner_loop,  daemon=True).start()
     tg(
-        "🟢 SADIK SIMPLE BOT v1\n\n"
+        "🟢 SADIK SIMPLE BOT v2\n\n"
         "Strateji: Trend + Momentum + RSI\n\n"
         f"TP: %{TP_PCT*100:.1f} | SL: %{SL_PCT*100:.1f}\n"
-        "BTC UP → sadece LONG\n"
-        "BTC DOWN → sadece SHORT\n"
-        "3 bar aynı yönde + RSI 45-70\n\n"
+        "BTC UP → LONG\n"
+        "BTC DOWN → SHORT\n"
+        "BTC NEUTRAL → max 2 pozisyon\n"
+        "Hacim filtresi: 2M (3M'den düşürüldü)\n"
+        "Momentum: 0.1 (0.2'den düşürüldü)\n\n"
         "/simple → istatistik"
     )
     while True:
