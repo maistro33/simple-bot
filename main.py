@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 HIZLANDIRILMIŞ FVG STRATEJİSİ — BACKTEST (4h/1h/15m/5m)
-🔖 VERSİYON: v1
+🔖 VERSİYON: v3 (2022 ayı piyasası — sağlamlık testi)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Gerçek parayla çalışan FVG botunun (1d+4h+1h+15m, swing — işlemler
 günlerce sürüyor) zaman dilimlerini bir kademe HIZLANDIRILMIŞ hali:
@@ -31,9 +31,9 @@ from datetime import datetime, timedelta, timezone
 # ════════════════════════════════════════════
 # CONFIG
 # ════════════════════════════════════════════
-BASLANGIC_TARIHI = None
-BITIS_TARIHI     = None
-GECMIS_GUN       = 90     # 5m veri çok yer kapladığı için daha kısa pencere
+BASLANGIC_TARIHI = "2022-01-01"   # 2022 ayı piyasası — sağlamlık testi
+BITIS_TARIHI     = "2022-12-31"
+GECMIS_GUN       = 30     # SADECE BASLANGIC_TARIHI=None ise kullanılır
 
 TOP_COINS        = 60
 MAX_POS_BACKTEST = 5
@@ -287,7 +287,7 @@ def portfoy_simulasyonu(tum_m5, tum_sinyaller, max_pos=1):
 # ANA
 # ════════════════════════════════════════════
 def main():
-    print("🔖 VERSİYON: v1 (hızlandırılmış FVG — 4h/1h/15m/5m)\n")
+    print("🔖 VERSİYON: v3 (2022 ayı piyasası — sağlamlık testi)\n")
     baslangic_ms, bitis_ms = tarih_araligi_hesapla()
     b_str = datetime.fromtimestamp(baslangic_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
     e_str = datetime.fromtimestamp(bitis_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
