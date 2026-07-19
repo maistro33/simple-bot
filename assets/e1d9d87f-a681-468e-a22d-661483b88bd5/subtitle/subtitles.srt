@@ -1,0 +1,7 @@
+1
+00:00:00,000 --> 00:00:07,270
+This is a short test script for subtitle
+
+2
+00:00:07,270 --> 00:00:10,000
+generation testing purposes.

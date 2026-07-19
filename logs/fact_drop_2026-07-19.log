@@ -1,0 +1,338 @@
+2026-07-19 22:18:33.379 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_full_pipeline_runs_end_to0/test_fact_drop.db
+2026-07-19 22:18:33.449 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.227 | INFO     | core.project_manager:create_project:65 | Created project 'Integration Test Mug' (id=236daa37-9f97-450f-897a-5cd6c8b9fd66)
+2026-07-19 22:18:35.240 | INFO     | engines.research_engine:execute:84 | Research complete for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 (category=home_and_kitchen)
+2026-07-19 22:18:35.241 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'product_analysis' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.0s
+2026-07-19 22:18:35.247 | INFO     | engines.strategy_engine:execute:54 | Strategy generated for project 236daa37-9f97-450f-897a-5cd6c8b9fd66: angle='The mug that thinks for you'
+2026-07-19 22:18:35.247 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'marketing_strategy' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.0s
+2026-07-19 22:18:35.254 | INFO     | engines.script_engine:execute:67 | Script generated for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 (37 words)
+2026-07-19 22:18:35.255 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'script_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.0s
+2026-07-19 22:18:35.267 | INFO     | engines.storyboard_engine:execute:73 | Storyboard generated for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 (2 scenes)
+2026-07-19 22:18:35.268 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'storyboard_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.01s
+2026-07-19 22:18:35.276 | INFO     | engines.prompt_engine:execute:63 | Generated 2 cinematic prompts for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.276 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'prompt_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.0s
+2026-07-19 22:18:35.280 | WARNING  | engines.voice_engine:execute:38 | ELEVENLABS_API_KEY not configured; skipping audio synthesis and recording a text-only voice entry.
+2026-07-19 22:18:35.283 | INFO     | engines.voice_engine:execute:73 | Voice-over generated for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 (~14.8s)
+2026-07-19 22:18:35.284 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'voice_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.0s
+2026-07-19 22:18:35.294 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subtitles.srt' (363 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.299 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subtitles.vtt' (361 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.303 | INFO     | engines.subtitle_engine:execute:67 | Generated 5 subtitle cues for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.303 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'subtitle_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.02s
+2026-07-19 22:18:35.312 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'thumbnail_primary.png' (20 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.316 | INFO     | engines.thumbnail_engine:execute:88 | Generated 1 thumbnail concepts for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.316 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'thumbnail_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.01s
+2026-07-19 22:18:35.323 | INFO     | engines.seo_engine:execute:58 | SEO package generated for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.324 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'seo_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.0s
+2026-07-19 22:18:35.327 | INFO     | engines.quality_engine:execute:46 | Quality assessment for project 236daa37-9f97-450f-897a-5cd6c8b9fd66: score=87.0
+2026-07-19 22:18:35.330 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'project_report.md' (868 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.334 | INFO     | engines.report_engine:execute:62 | Report generated for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 (quality_score=87.0)
+2026-07-19 22:18:35.334 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'report_generation' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.01s
+2026-07-19 22:18:35.340 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'scene_01.png' (22 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.343 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'scene_02.png' (22 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.348 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'final_video.mp4' (14 bytes) for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.349 | INFO     | engines.video_engine:execute:77 | Final video assembled for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 at /home/claude/FACT_DROP_AI/assets/236daa37-9f97-450f-897a-5cd6c8b9fd66/video/final_video.mp4
+2026-07-19 22:18:35.368 | INFO     | core.export_manager:export_project:222 | Exported project 236daa37-9f97-450f-897a-5cd6c8b9fd66 to /home/claude/FACT_DROP_AI/exports/236daa37-9f97-450f-897a-5cd6c8b9fd66_20260719T221835.zip
+2026-07-19 22:18:35.369 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'export' completed for project 236daa37-9f97-450f-897a-5cd6c8b9fd66 in 0.03s
+2026-07-19 22:18:35.373 | INFO     | core.workflow_engine:run:130 | Workflow completed successfully for project 236daa37-9f97-450f-897a-5cd6c8b9fd66
+2026-07-19 22:18:35.382 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_pipeline_resume_skips_com0/test_fact_drop.db
+2026-07-19 22:18:35.435 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.440 | INFO     | core.project_manager:create_project:65 | Created project 'Resume Test' (id=b21d934b-bc40-463e-a5b0-b98ffe570ea0)
+2026-07-19 22:18:35.452 | INFO     | engines.research_engine:execute:84 | Research complete for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 (category=home_and_kitchen)
+2026-07-19 22:18:35.452 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'product_analysis' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.459 | INFO     | engines.strategy_engine:execute:54 | Strategy generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0: angle='The mug that thinks for you'
+2026-07-19 22:18:35.459 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'marketing_strategy' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.466 | INFO     | engines.script_engine:execute:67 | Script generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 (37 words)
+2026-07-19 22:18:35.466 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'script_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.475 | INFO     | engines.storyboard_engine:execute:73 | Storyboard generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 (2 scenes)
+2026-07-19 22:18:35.476 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'storyboard_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.483 | INFO     | engines.prompt_engine:execute:63 | Generated 2 cinematic prompts for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.484 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'prompt_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.488 | WARNING  | engines.voice_engine:execute:38 | ELEVENLABS_API_KEY not configured; skipping audio synthesis and recording a text-only voice entry.
+2026-07-19 22:18:35.491 | INFO     | engines.voice_engine:execute:73 | Voice-over generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 (~14.8s)
+2026-07-19 22:18:35.491 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'voice_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.497 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subtitles.srt' (363 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.501 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subtitles.vtt' (361 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.504 | INFO     | engines.subtitle_engine:execute:67 | Generated 5 subtitle cues for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.504 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'subtitle_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.01s
+2026-07-19 22:18:35.511 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'thumbnail_primary.png' (20 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.514 | INFO     | engines.thumbnail_engine:execute:88 | Generated 1 thumbnail concepts for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.515 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'thumbnail_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.01s
+2026-07-19 22:18:35.521 | INFO     | engines.seo_engine:execute:58 | SEO package generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.522 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'seo_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.526 | INFO     | engines.quality_engine:execute:46 | Quality assessment for project b21d934b-bc40-463e-a5b0-b98ffe570ea0: score=87.0
+2026-07-19 22:18:35.529 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'project_report.md' (868 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.532 | INFO     | engines.report_engine:execute:62 | Report generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 (quality_score=87.0)
+2026-07-19 22:18:35.532 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'report_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.01s
+2026-07-19 22:18:35.538 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'scene_01.png' (22 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.540 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'scene_02.png' (22 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.545 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'final_video.mp4' (14 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.545 | INFO     | engines.video_engine:execute:77 | Final video assembled for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 at /home/claude/FACT_DROP_AI/assets/b21d934b-bc40-463e-a5b0-b98ffe570ea0/video/final_video.mp4
+2026-07-19 22:18:35.559 | INFO     | core.export_manager:export_project:222 | Exported project b21d934b-bc40-463e-a5b0-b98ffe570ea0 to /home/claude/FACT_DROP_AI/exports/b21d934b-bc40-463e-a5b0-b98ffe570ea0_20260719T221835.zip
+2026-07-19 22:18:35.560 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'export' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.02s
+2026-07-19 22:18:35.564 | INFO     | core.workflow_engine:run:130 | Workflow completed successfully for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.580 | INFO     | engines.seo_engine:execute:58 | SEO package generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.581 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'seo_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.0s
+2026-07-19 22:18:35.585 | INFO     | engines.quality_engine:execute:46 | Quality assessment for project b21d934b-bc40-463e-a5b0-b98ffe570ea0: score=87.0
+2026-07-19 22:18:35.589 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'project_report.md' (868 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.592 | INFO     | engines.report_engine:execute:62 | Report generated for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 (quality_score=87.0)
+2026-07-19 22:18:35.592 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'report_generation' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.01s
+2026-07-19 22:18:35.599 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'scene_01.png' (22 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.605 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'scene_02.png' (22 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.609 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'final_video.mp4' (14 bytes) for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.610 | INFO     | engines.video_engine:execute:77 | Final video assembled for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 at /home/claude/FACT_DROP_AI/assets/b21d934b-bc40-463e-a5b0-b98ffe570ea0/video/final_video.mp4
+2026-07-19 22:18:35.619 | INFO     | core.export_manager:export_project:222 | Exported project b21d934b-bc40-463e-a5b0-b98ffe570ea0 to /home/claude/FACT_DROP_AI/exports/b21d934b-bc40-463e-a5b0-b98ffe570ea0_20260719T221835.zip
+2026-07-19 22:18:35.620 | INFO     | core.workflow_engine:_execute_stage:154 | Stage 'export' completed for project b21d934b-bc40-463e-a5b0-b98ffe570ea0 in 0.02s
+2026-07-19 22:18:35.624 | INFO     | core.workflow_engine:run:130 | Workflow completed successfully for project b21d934b-bc40-463e-a5b0-b98ffe570ea0
+2026-07-19 22:18:35.627 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_save_bytes_creates_file_a0/test_fact_drop.db
+2026-07-19 22:18:35.687 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.695 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=bf7b614c-455b-482c-a0cd-3e584fb20205)
+2026-07-19 22:18:35.702 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'note.txt' (11 bytes) for project bf7b614c-455b-482c-a0cd-3e584fb20205
+2026-07-19 22:18:35.706 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_save_text_round_trip0/test_fact_drop.db
+2026-07-19 22:18:35.757 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.762 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=fccea126-5270-4a25-b62e-4a690e5f5c85)
+2026-07-19 22:18:35.766 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subs.srt' (35 bytes) for project fccea126-5270-4a25-b62e-4a690e5f5c85
+2026-07-19 22:18:35.770 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_list_assets_returns_saved0/test_fact_drop.db
+2026-07-19 22:18:35.839 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.850 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=1ea6abf8-7598-48cb-9bd1-b5e8fb2f4eee)
+2026-07-19 22:18:35.864 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'a.png' (14 bytes) for project 1ea6abf8-7598-48cb-9bd1-b5e8fb2f4eee
+2026-07-19 22:18:35.869 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'b.png' (15 bytes) for project 1ea6abf8-7598-48cb-9bd1-b5e8fb2f4eee
+2026-07-19 22:18:35.873 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_sanitise_filename_strips_0/test_fact_drop.db
+2026-07-19 22:18:35.924 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.927 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_settings_load_defaults0/test_fact_drop.db
+2026-07-19 22:18:35.981 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:35.984 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_settings_singleton_is_cac0/test_fact_drop.db
+2026-07-19 22:18:36.040 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.043 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_invalid_video_provider_re0/test_fact_drop.db
+2026-07-19 22:18:36.106 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.109 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_has_openai_credentials_re0/test_fact_drop.db
+2026-07-19 22:18:36.186 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.190 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_workflow_stage_ordering0/test_fact_drop.db
+2026-07-19 22:18:36.252 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.254 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_workflow_stage_next_stage0/test_fact_drop.db
+2026-07-19 22:18:36.318 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.320 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_event_bus_publish_invokes0/test_fact_drop.db
+2026-07-19 22:18:36.380 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.382 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_event_bus_wildcard_subscr0/test_fact_drop.db
+2026-07-19 22:18:36.442 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.445 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_event_bus_unsubscribe_sto0/test_fact_drop.db
+2026-07-19 22:18:36.509 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.512 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_event_bus_handler_excepti0/test_fact_drop.db
+2026-07-19 22:18:36.581 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.581 | ERROR    | core.event_bus:publish:86 | Event handler for 'y' raised an exception.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/local/lib/python3.12/dist-packages/pytest/__main__.py", line 9, in <module>
+    raise SystemExit(pytest.console_main())
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/config/__init__.py", line 201, in console_main
+    code = main()
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/config/__init__.py", line 175, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 330, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 283, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 337, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 362, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 113, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 132, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 241, in call_and_report
+    call = CallInfo.from_call(
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 341, in from_call
+    result: TResult | None = func()
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 242, in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 174, in pytest_runtest_call
+    item.runtest()
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/python.py", line 1627, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/python.py", line 159, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File "/home/claude/FACT_DROP_AI/tests/unit/test_core.py", line 69, in test_event_bus_handler_exception_does_not_break_others
+    bus.publish("y", {})
+> File "/home/claude/FACT_DROP_AI/core/event_bus.py", line 82, in publish
+    result = handler(event)
+  File "/home/claude/FACT_DROP_AI/tests/unit/test_core.py", line 62, in bad_handler
+    raise RuntimeError("boom")
+RuntimeError: boom
+2026-07-19 22:18:36.589 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_cache_manager_set_and_get0/test_fact_drop.db
+2026-07-19 22:18:36.648 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.658 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_cache_manager_missing_key0/test_fact_drop.db
+2026-07-19 22:18:36.801 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.806 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_cache_manager_delete_remo0/test_fact_drop.db
+2026-07-19 22:18:36.881 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.892 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_project_manager_create_an0/test_fact_drop.db
+2026-07-19 22:18:36.971 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:36.977 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=af359ff7-4514-4dff-ad7f-3bd6b761ae03)
+2026-07-19 22:18:36.982 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_project_manager_list_proj0/test_fact_drop.db
+2026-07-19 22:18:37.050 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:37.094 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=c1dd9a29-3bf1-469e-a799-9099f34b95d4)
+2026-07-19 22:18:37.099 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_project_manager_undo_reve0/test_fact_drop.db
+2026-07-19 22:18:37.146 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:37.151 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=7b43e837-38d7-4649-93fd-0520655dbd04)
+2026-07-19 22:18:37.163 | INFO     | core.project_manager:undo_last_action:161 | Reverted project 7b43e837-38d7-4649-93fd-0520655dbd04 to snapshot seq=2
+2026-07-19 22:18:37.166 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_project_manager_delete_re0/test_fact_drop.db
+2026-07-19 22:18:37.219 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:37.224 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=4adc90f8-6941-4b9e-9031-3aef3806552c)
+2026-07-19 22:18:37.244 | INFO     | core.project_manager:delete_project:129 | Deleted project 4adc90f8-6941-4b9e-9031-3aef3806552c
+2026-07-19 22:18:37.245 | ERROR    | database.session:session_scope:94 | Database session rolled back due to an error.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/local/lib/python3.12/dist-packages/pytest/__main__.py", line 9, in <module>
+    raise SystemExit(pytest.console_main())
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/config/__init__.py", line 201, in console_main
+    code = main()
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/config/__init__.py", line 175, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 330, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 283, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 337, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/main.py", line 362, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 113, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 132, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 241, in call_and_report
+    call = CallInfo.from_call(
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 341, in from_call
+    result: TResult | None = func()
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 242, in <lambda>
+    lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/runner.py", line 174, in pytest_runtest_call
+    item.runtest()
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/python.py", line 1627, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/usr/local/lib/python3.12/dist-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/usr/local/lib/python3.12/dist-packages/_pytest/python.py", line 159, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File "/home/claude/FACT_DROP_AI/tests/unit/test_core.py", line 143, in test_project_manager_delete_removes_project
+    manager.get_project(sample_project.id)
+  File "/home/claude/FACT_DROP_AI/core/project_manager.py", line 73, in get_project
+    with session_scope() as session:
+  File "/usr/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+> File "/home/claude/FACT_DROP_AI/database/session.py", line 90, in session_scope
+    yield session
+  File "/home/claude/FACT_DROP_AI/core/project_manager.py", line 76, in get_project
+    raise ProjectNotFoundError(f"No project found with id={project_id}")
+core.exceptions.ProjectNotFoundError: No project found with id=4adc90f8-6941-4b9e-9031-3aef3806552c
+2026-07-19 22:18:37.252 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_queue_manager_executes_su0/test_fact_drop.db
+2026-07-19 22:18:37.306 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:37.310 | INFO     | core.queue_manager:submit:82 | Job 'sample_job' queued with id=cc8a4220-ec6a-40a1-a151-aa99e8e50f11
+2026-07-19 22:18:37.310 | INFO     | core.queue_manager:_run_job:92 | Job 'sample_job' (id=cc8a4220-ec6a-40a1-a151-aa99e8e50f11) started.
+2026-07-19 22:18:37.321 | INFO     | core.queue_manager:_run_job:96 | Job 'sample_job' (id=cc8a4220-ec6a-40a1-a151-aa99e8e50f11) completed successfully.
+2026-07-19 22:18:37.815 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_settings_manager_get_defa0/test_fact_drop.db
+2026-07-19 22:18:37.865 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:37.871 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_settings_manager_set_over0/test_fact_drop.db
+2026-07-19 22:18:37.931 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:37.940 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_create_and_fetch_project0/test_fact_drop.db
+2026-07-19 22:18:37.991 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.002 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_project_cascade_delete_re0/test_fact_drop.db
+2026-07-19 22:18:38.052 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.079 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_get_by_status_filters_cor0/test_fact_drop.db
+2026-07-19 22:18:38.136 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.145 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_script_repository_get_lat0/test_fact_drop.db
+2026-07-19 22:18:38.199 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.209 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_base_repository_update_an0/test_fact_drop.db
+2026-07-19 22:18:38.265 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.310 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_strategy_engine_persists_0/test_fact_drop.db
+2026-07-19 22:18:38.358 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.365 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=f4836d2d-827e-464e-9dba-a54639e3dc81)
+2026-07-19 22:18:38.373 | INFO     | engines.strategy_engine:execute:54 | Strategy generated for project f4836d2d-827e-464e-9dba-a54639e3dc81: angle='Convenience for busy professionals'
+2026-07-19 22:18:38.377 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_script_engine_generates_h0/test_fact_drop.db
+2026-07-19 22:18:38.428 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.434 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=0f95f3bf-33e3-45cc-9538-673f4ac97bbf)
+2026-07-19 22:18:38.442 | INFO     | engines.script_engine:execute:67 | Script generated for project 0f95f3bf-33e3-45cc-9538-673f4ac97bbf (11 words)
+2026-07-19 22:18:38.445 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_seo_engine_persists_seo_p0/test_fact_drop.db
+2026-07-19 22:18:38.492 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.497 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=558631c3-f774-4c98-b579-3fb7d23c88f7)
+2026-07-19 22:18:38.503 | INFO     | engines.seo_engine:execute:58 | SEO package generated for project 558631c3-f774-4c98-b579-3fb7d23c88f7
+2026-07-19 22:18:38.507 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_quality_engine_clamps_sco0/test_fact_drop.db
+2026-07-19 22:18:38.557 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.558 | INFO     | engines.quality_engine:execute:46 | Quality assessment for project fake-project-id: score=100.0
+2026-07-19 22:18:38.561 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_subtitle_engine_generates0/test_fact_drop.db
+2026-07-19 22:18:38.609 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.618 | INFO     | core.project_manager:create_project:65 | Created project 'Test Self-Stirring Mug' (id=e1d9d87f-a681-468e-a22d-661483b88bd5)
+2026-07-19 22:18:38.629 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subtitles.srt' (135 bytes) for project e1d9d87f-a681-468e-a22d-661483b88bd5
+2026-07-19 22:18:38.634 | INFO     | core.asset_manager:save_bytes:104 | Saved asset 'subtitles.vtt' (139 bytes) for project e1d9d87f-a681-468e-a22d-661483b88bd5
+2026-07-19 22:18:38.639 | INFO     | engines.subtitle_engine:execute:67 | Generated 2 subtitle cues for project e1d9d87f-a681-468e-a22d-661483b88bd5
+2026-07-19 22:18:38.642 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_amazon_plugin_matches_dom0/test_fact_drop.db
+2026-07-19 22:18:38.735 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.738 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_amazon_plugin_extracts_op0/test_fact_drop.db
+2026-07-19 22:18:38.799 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.803 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_plugin_registry_resolves_0/test_fact_drop.db
+2026-07-19 22:18:38.865 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.869 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_plugin_registry_returns_n0/test_fact_drop.db
+2026-07-19 22:18:38.943 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.945 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_shopify_plugin_matches_pr0/test_fact_drop.db
+2026-07-19 22:18:38.987 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.
+2026-07-19 22:18:38.990 | INFO     | database.session:get_engine:60 | Database engine initialised for URL: sqlite:////tmp/pytest-of-root/pytest-3/test_extract_open_graph_data_f0/test_fact_drop.db
+2026-07-19 22:18:39.040 | INFO     | database.session:init_database:111 | Database schema verified/created successfully.

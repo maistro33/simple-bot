@@ -1,5 +1,53 @@
-ccxt
-pandas
-pyTelegramBotAPI
-supabase
-requests
+##############################################################################
+# FACT DROP AI STUDIO — Production Dependencies
+# Python 3.12+
+##############################################################################
+
+# --- Core / CLI / UX ---------------------------------------------------
+typer[all]==0.12.5
+rich==13.9.4
+click==8.1.7
+
+# --- Configuration & Validation -----------------------------------------
+pydantic==2.9.2
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# --- Database -------------------------------------------------------------
+SQLAlchemy==2.0.36
+alembic==1.14.0
+
+# --- Logging ----------------------------------------------------------------
+loguru==0.7.2
+
+# --- Networking / HTTP ------------------------------------------------------
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.3.0
+aiohttp==3.11.10
+httpx==0.28.1
+
+# --- AI Providers -------------------------------------------------------
+openai==1.57.4
+elevenlabs==1.13.3
+
+# --- Media Processing ---------------------------------------------------
+Pillow==11.0.0
+opencv-python-headless==4.10.0.84
+moviepy==1.0.3
+numpy==2.1.3
+
+# --- Scheduling / File Watching -----------------------------------------
+APScheduler==3.10.4
+watchdog==6.0.0
+
+# --- Utilities ------------------------------------------------------------
+tenacity==9.0.0
+python-slugify==8.0.4
+jinja2==3.1.4
+
+# --- Testing --------------------------------------------------------------
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-mock==3.14.0
