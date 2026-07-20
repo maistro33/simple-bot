@@ -25,22 +25,12 @@ class ImageGenerationService:
     def __init__(self, openai_service: OpenAIService | None = None) -> None:
         self._openai_service = openai_service or OpenAIService()
 
-    def generate(self, prompt: str, aspect_ratio: str = "9:16", quality: str = "auto") -> bytes:
-        """
-        Generate a single image for the given cinematic prompt.
-
-        Args:
-            prompt: The full positive image prompt, including style/lighting cues.
-            aspect_ratio: One of ``"9:16"`` (vertical/Shorts), ``"16:9"`` or ``"1:1"``.
-            quality: Provider-specific quality tier (``"low"``, ``"medium"``, ``"high"`` or ``"auto"``).
-
-        Returns:
-            Raw PNG image bytes.
-        """
+    def generate(self, prompt: str, aspect_ratio: str = "9:16", quality: str = "low") -> bytes:
+        """Generate a single image for the given cinematic prompt. Defaults to low quality to keep cost small."""
         size = _ASPECT_RATIO_TO_SIZE.get(aspect_ratio, "1024x1536")
         logger.debug("Generating image ({}, {}): {}", size, quality, prompt[:80])
         return self._openai_service.generate_image(prompt, size=size, quality=quality)
 
-    def generate_thumbnail(self, prompt: str, quality: str = "high") -> bytes:
+    def generate_thumbnail(self, prompt: str, quality: str = "medium") -> bytes:
         """Generate a 16:9 landscape thumbnail image (YouTube's preferred ratio)."""
         return self.generate(prompt, aspect_ratio="16:9", quality=quality)
