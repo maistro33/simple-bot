@@ -37,20 +37,36 @@ class VideoEngine(BaseEngine):
             )
             return {"final_video_path": None}
 
+        # Reuse scene images already generated on a previous (failed) attempt
+        # instead of burning OpenAI credits regenerating every scene again.
+        existing_assets = {
+            asset.file_name: Path(asset.file_path)
+            for asset in self._asset_manager.list_assets(project_id)
+            if asset.asset_type == AssetType.IMAGE and asset.file_name.startswith("scene_")
+        }
+
         scene_paths: list[Path] = []
         scene_durations: list[float] = []
 
         try:
             for scene, prompt in zip(storyboard, prompts):
-                image_bytes = self._video_service.generate_scene_visual(prompt["positive_prompt"])
-                asset = self._asset_manager.save_bytes(
-                    project_id,
-                    AssetType.IMAGE,
-                    f"scene_{scene['scene_number']:02d}.png",
-                    image_bytes,
-                    source_stage=WorkflowStage.PROMPT_GENERATION.value,
-                )
-                scene_paths.append(Path(asset.file_path))
+                file_name = f"scene_{scene['scene_number']:02d}.png"
+                existing_path = existing_assets.get(file_name)
+
+                if existing_path is not None and existing_path.exists():
+                    self.logger.info("Reusing already-generated scene image {} for project {}", file_name, project_id)
+                    scene_paths.append(existing_path)
+                else:
+                    image_bytes = self._video_service.generate_scene_visual(prompt["positive_prompt"])
+                    asset = self._asset_manager.save_bytes(
+                        project_id,
+                        AssetType.IMAGE,
+                        file_name,
+                        image_bytes,
+                        source_stage=WorkflowStage.PROMPT_GENERATION.value,
+                    )
+                    scene_paths.append(Path(asset.file_path))
+
                 scene_durations.append(float(scene.get("duration_seconds", 5)))
         except Exception as exc:
             raise StageExecutionError("video_assembly", f"Scene visual generation failed: {exc}") from exc
