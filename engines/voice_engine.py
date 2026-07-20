@@ -34,27 +34,32 @@ class VoiceEngine(BaseEngine):
         voice_service = VoiceGenerationService()
         estimated_duration = voice_service.estimate_duration_seconds(narration_text)
 
+        file_path = None
+        actual_duration = estimated_duration
+
         if not self._settings.has_elevenlabs_credentials:
             self.logger.warning(
                 "ELEVENLABS_API_KEY not configured; skipping audio synthesis and recording a text-only voice entry."
             )
-            file_path = None
-            actual_duration = estimated_duration
         else:
             try:
                 audio_bytes = voice_service.synthesize(narration_text)
+                asset = self._asset_manager.save_bytes(
+                    project_id,
+                    AssetType.AUDIO,
+                    "voice_over.mp3",
+                    audio_bytes,
+                    source_stage=WorkflowStage.VOICE_GENERATION.value,
+                )
+                file_path = asset.file_path
             except Exception as exc:
-                raise StageExecutionError(WorkflowStage.VOICE_GENERATION.value, str(exc)) from exc
-
-            asset = self._asset_manager.save_bytes(
-                project_id,
-                AssetType.AUDIO,
-                "voice_over.mp3",
-                audio_bytes,
-                source_stage=WorkflowStage.VOICE_GENERATION.value,
-            )
-            file_path = asset.file_path
-            actual_duration = estimated_duration
+                # Any ElevenLabs failure (payment required, rate limit, plan
+                # restriction, etc.) degrades gracefully to a silent video
+                # rather than failing the whole project — voice-over is a
+                # nice-to-have, not a hard requirement for the pipeline.
+                self.logger.warning(
+                    "Voice synthesis failed ({}); continuing without audio for project {}.", exc, project_id
+                )
 
         with session_scope() as session:
             self._voice_repo.create(
