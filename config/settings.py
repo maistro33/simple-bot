@@ -158,6 +158,24 @@ class Settings(BaseSettings):
     def has_elevenlabs_credentials(self) -> bool:
         """Return True if an ElevenLabs API key has been configured."""
         return bool(self.elevenlabs_api_key.strip())
+        
+    @property
+    def has_telegram_credentials(self) -> bool:
+        """Return True if a Telegram bot token has been configured."""
+        return bool(self.telegram_bot_token.strip())
+
+    @property
+    def telegram_admin_id_list(self) -> list[int]:
+        """Parse the comma-separated TELEGRAM_ADMIN_IDS into a list of integer user IDs."""
+        if not self.telegram_admin_ids.strip():
+            return []
+        result: list[int] = []
+        for chunk in self.telegram_admin_ids.split(","):
+            chunk = chunk.strip()
+            if chunk.isdigit() or (chunk.startswith("-") and chunk[1:].isdigit()):
+                result.append(int(chunk))
+        return result
+
 
 
 @lru_cache(maxsize=1)
