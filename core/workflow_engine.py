@@ -6,6 +6,7 @@ handling to the Recovery Manager.
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any, Callable
 
@@ -31,10 +32,6 @@ from engines.voice_engine import VoiceEngine
 
 logger = get_logger(__name__)
 
-# Maps each workflow stage to the engine method that executes it. Stages
-# not listed here (CATEGORY_DETECTION, BRAND_DETECTION, COMPETITOR_RESEARCH,
-# AUDIENCE_ANALYSIS) are folded into ResearchEngine's single PRODUCT_ANALYSIS
-# execution for efficiency (one research pass naturally produces all five).
 _STAGE_ENGINE_ORDER: list[WorkflowStage] = [
     WorkflowStage.PRODUCT_ANALYSIS,
     WorkflowStage.MARKETING_STRATEGY,
@@ -90,22 +87,12 @@ class WorkflowEngine:
             WorkflowStage.EXPORT: self._run_export_stage,
         }
 
-    def run(self, project_id: str, resume: bool = False) -> dict[str, Any]:
+    def run(
+        self, project_id: str, resume: bool = False, cancel_event: "threading.Event | None" = None
+    ) -> dict[str, Any]:
         """
         Execute the full pipeline for a project from its current stage
         through to completion.
-
-        Args:
-            project_id: The project to process.
-            resume: If True, skip stages already recorded as completed by
-                starting from the project's persisted ``current_stage``.
-
-        Returns:
-            The final accumulated context dict, including every stage's output.
-
-        Raises:
-            StageExecutionError: If a non-recoverable failure occurs, after
-                exhausting retries for recoverable ones.
         """
         project = self._project_manager.get_project(project_id)
         context: dict[str, Any] = {"raw_input": project.raw_input, "stage_durations": {}}
@@ -123,6 +110,12 @@ class WorkflowEngine:
 
         try:
             for stage in _STAGE_ENGINE_ORDER[start_index:]:
+                if cancel_event is not None and cancel_event.is_set():
+                    self._project_manager.update_stage(project_id, stage, WorkflowStatus.PAUSED)
+                    self._event_bus.publish("workflow.paused", {"project_id": project_id, "stage": stage.value})
+                    logger.info("Workflow for project {} paused before stage '{}'.", project_id, stage.value)
+                    return context
+
                 context = self._execute_stage(project_id, stage, context)
 
             self._project_manager.update_stage(project_id, WorkflowStage.FINISHED, WorkflowStatus.COMPLETED)
