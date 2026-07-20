@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     youtube_api_key: str = Field(default="", alias="YOUTUBE_API_KEY")
     youtube_client_id: str = Field(default="", alias="YOUTUBE_CLIENT_ID")
     youtube_client_secret: str = Field(default="", alias="YOUTUBE_CLIENT_SECRET")
+    
+    # --- Telegram Bot -----------------------------------------------------------
+    telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
+    telegram_admin_ids: str = Field(default="", alias="TELEGRAM_ADMIN_IDS")
+
 
     # --- Video provider -------------------------------------------------------
     video_provider: str = Field(default="none", alias="VIDEO_PROVIDER")
