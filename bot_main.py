@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ════════════════════════════════════════════════════════
-PAPER BOT v2.0 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
+PAPER BOT v2.1 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
 12 Ağustos 2026
 
 ⚠️ BU BOT GERÇEK EMİR AÇMAZ. Sadece canlı fiyatlarla simülasyon
@@ -124,6 +124,10 @@ ADAY_HAVUZU_BUYUKLUGU = 80
 
 TREND_KONTROL_ARALIGI_SN = int(os.getenv("TREND_KONTROL_ARALIGI_SN", "900"))
 TREND_TERS_TEYIT_SAYISI = int(os.getenv("TREND_TERS_TEYIT_SAYISI", "2"))
+TREND_TERS_TEYIT_KISMI_SAYISI = int(os.getenv("TREND_TERS_TEYIT_KISMI_SAYISI", "4"))
+# KULLANICI KARARI (14.08.2026): live_bot'taki (gerçek para) iki kademeli
+# mantığın aynısı buraya da uygulandı - çoğunluk (2-3 zaman dilimi) bozulunca
+# hızlı teyit, sadece biri bozulunca daha uzun/temkinli teyit.
 
 TRADE_STATE_PATH = os.getenv("TRADE_STATE_PATH", "/data/paperv2_state.json")
 COOLDOWN_PATH = os.getenv("COOLDOWN_PATH", "/data/paperv2_cooldown.json")
@@ -363,7 +367,8 @@ def sanal_pozisyon_kapat(sym, cikis_fiyat, sebep):
 
     emoji = "🟢" if net_pnl >= 0 else "🔴"
     sebep_etiket = {"sl": "SL vuruldu", "iz_suren_tp": "İz süren TP (geri çekilme)",
-                     "max_hold_timeout": "Max süre doldu", "trend_degisti": "Üst trend değişti"}.get(sebep, sebep)
+                     "max_hold_timeout": "Max süre doldu", "trend_degisti": "Üst trend çoğunlukla değişti",
+                     "trend_kismi_degisti": "Üst trend kısmen değişti"}.get(sebep, sebep)
 
     if iz_aktif and en_iyi_kar is not None:
         iz_satiri = (f"\n🔒 İz sürme: AKTİFTİ | En iyi an: {en_iyi_kar:+.2f}$ | "
@@ -487,7 +492,7 @@ def panel_gecmis_metni():
     for t in list(reversed(gecmis))[:15]:
         emoji = "🟢" if t["pnl"] >= 0 else "🔴"
         sebep = {"sl": "SL", "iz_suren_tp": "iz süren TP", "max_hold_timeout": "max süre",
-                 "trend_degisti": "trend değişti"}.get(t.get("not"), t.get("not", "?"))
+                 "trend_degisti": "trend çoğunlukla değişti", "trend_kismi_degisti": "trend kısmen değişti"}.get(t.get("not"), t.get("not", "?"))
         iz_bilgi = ""
         if t.get("iz_surme_aktifti"):
             en_iyi = t.get("en_iyi_kar")
@@ -701,39 +706,63 @@ def manage_loop():
                     continue
 
                 # TREND DÖNÜŞ AJANI: 1D+4H+1H uyumu periyodik olarak yeniden
-                # kontrol edilir - biri bile artık yükselişte değilse VE bu
-                # ardışık TREND_TERS_TEYIT_SAYISI kontrolde teyit edilirse
-                # (tek seferlik titremeyle değil), SL beklenmeden kapatılır.
+                # kontrol edilir. v2.1 KULLANICI KARARI (14.08.2026): live_bot'ta
+                # (gerçek para) tek kademeli mantığın çok temkinli/çok gevşek
+                # olabildiği görüldü - artık İKİ KADEMELİ: ÇOĞUNLUK bozulmuşsa
+                # (3 zaman diliminden 2'si veya 3'ü artık yükselişte değil) daha
+                # HIZLI teyit (TREND_TERS_TEYIT_SAYISI), sadece BİRİ bozulmuşsa
+                # (daha zayıf/gürültülü sinyal) daha UZUN teyit
+                # (TREND_TERS_TEYIT_KISMI_SAYISI) isteniyor.
                 son_kontrol = durum.get("son_trend_kontrol", 0)
                 if time.time() - son_kontrol >= TREND_KONTROL_ARALIGI_SN:
                     try:
                         y1d = trend_yonu(get_df(sym, "1d", MA_PERIYOT + 10))
                         y4h = trend_yonu(get_df(sym, "4h", MA_PERIYOT + 5))
                         y1h = trend_yonu(get_df(sym, "1h", MA_PERIYOT + 5))
-                        ters_tespit = not (y1d == "yukselis" and y4h == "yukselis" and y1h == "yukselis")
+                        bozuk_sayisi = sum(1 for y in (y1d, y4h, y1h) if y != "yukselis")
+                        tam_ters = bozuk_sayisi >= 2
+                        kismi_ters = bozuk_sayisi == 1
 
                         with state_lock:
                             if sym not in trade_state:
                                 continue
                             trade_state[sym]["son_trend_kontrol"] = time.time()
-                            if ters_tespit:
+                            if tam_ters:
                                 trade_state[sym]["ters_trend_sayisi"] = trade_state[sym].get("ters_trend_sayisi", 0) + 1
-                                sayac = trade_state[sym]["ters_trend_sayisi"]
+                                trade_state[sym]["kismi_ters_sayisi"] = 0
+                                sayac_tam = trade_state[sym]["ters_trend_sayisi"]
+                                sayac_kismi = 0
+                            elif kismi_ters:
+                                trade_state[sym]["kismi_ters_sayisi"] = trade_state[sym].get("kismi_ters_sayisi", 0) + 1
+                                trade_state[sym]["ters_trend_sayisi"] = 0
+                                sayac_kismi = trade_state[sym]["kismi_ters_sayisi"]
+                                sayac_tam = 0
                             else:
                                 trade_state[sym]["ters_trend_sayisi"] = 0
-                                sayac = 0
+                                trade_state[sym]["kismi_ters_sayisi"] = 0
+                                sayac_tam = 0
+                                sayac_kismi = 0
 
-                        log.info(f"[TREND_KONTROL] {sym} 1d={y1d} 4h={y4h} 1h={y1h} "
-                                 f"ters_tespit={ters_tespit} sayac={sayac}/{TREND_TERS_TEYIT_SAYISI}")
+                        log.info(f"[TREND_KONTROL] {sym} 1d={y1d} 4h={y4h} 1h={y1h} bozuk={bozuk_sayisi}/3 "
+                                 f"tam_ters={tam_ters} sayac_tam={sayac_tam}/{TREND_TERS_TEYIT_SAYISI} "
+                                 f"kismi_ters={kismi_ters} sayac_kismi={sayac_kismi}/{TREND_TERS_TEYIT_KISMI_SAYISI}")
 
-                        if ters_tespit and sayac >= TREND_TERS_TEYIT_SAYISI:
-                            tg(f"⚠️ {sym} — üst trend uyumu (1D+4H+1H) {sayac} kontrol boyunca "
-                               f"ardışık bozuldu, sanal pozisyon SL beklenmeden kapatılıyor.")
+                        if tam_ters and sayac_tam >= TREND_TERS_TEYIT_SAYISI:
+                            tg(f"⚠️ {sym} — üst trend uyumu ÇOĞUNLUKLA ({bozuk_sayisi}/3) {sayac_tam} kontrol "
+                               f"boyunca ardışık bozuldu, sanal pozisyon SL beklenmeden kapatılıyor.")
                             sanal_pozisyon_kapat(sym, guncel, "trend_degisti")
                             continue
-                        elif ters_tespit:
-                            tg(f"👀 {sym} — üst trend uyumu bozulmuş görünüyor, "
-                               f"{sayac}/{TREND_TERS_TEYIT_SAYISI} teyit - henüz kapatılmadı, izleniyor.")
+                        elif kismi_ters and sayac_kismi >= TREND_TERS_TEYIT_KISMI_SAYISI:
+                            tg(f"⚠️ {sym} — üst trend KISMEN (1/3) {sayac_kismi} kontrol boyunca ardışık "
+                               f"bozuldu, sanal pozisyon SL beklenmeden kapatılıyor.")
+                            sanal_pozisyon_kapat(sym, guncel, "trend_kismi_degisti")
+                            continue
+                        elif tam_ters:
+                            tg(f"👀 {sym} — üst trend ÇOĞUNLUKLA bozulmuş görünüyor ({bozuk_sayisi}/3), "
+                               f"{sayac_tam}/{TREND_TERS_TEYIT_SAYISI} teyit - henüz kapatılmadı, izleniyor.")
+                        elif kismi_ters:
+                            tg(f"👀 {sym} — üst trend KISMEN bozulmuş görünüyor (1/3), "
+                               f"{sayac_kismi}/{TREND_TERS_TEYIT_KISMI_SAYISI} teyit - henüz kapatılmadı, izleniyor.")
                     except Exception as e:
                         log.warning(f"[TREND_KONTROL_HATA] {sym}: {e}")
 
@@ -767,7 +796,7 @@ def manage_loop():
 
 
 def tarama_loop():
-    tg(f"🚀 PAPER BOT v2.0 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
+    tg(f"🚀 PAPER BOT v2.1 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
        f"⚠️ SANAL - hiçbir gerçek emir açılmıyor, sadece simülasyon.\n"
        f"Kural: 1D+4H+1H üçü de yükselişte olmalı, sadece o zaman 15m sinyaline bakılır.\n"
        f"MAX_POS={MAX_POS} | Sanal marjin: ${SANAL_MARJIN_USDT:.2f} | {LEV}x\n"
@@ -821,7 +850,7 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("PAPER BOT v2.0 (1D+4H+1H UYUM) BAŞLIYOR...")
+    print("PAPER BOT v2.1 (1D+4H+1H UYUM, iki kademeli trend) BAŞLIYOR...")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
     trade_log_yukle()
