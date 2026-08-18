@@ -1,36 +1,44 @@
 #!/usr/bin/env python3
 """
 ════════════════════════════════════════════════════════
-LIVE BOT v2.0 — 1D+4H+1H Uyum + SADECE LONG (GERÇEK PARA)
-14 Ağustos 2026
+PAPER BOT v2.1 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
+12 Ağustos 2026
 
-KULLANICI KARARI: Eski live_bot (v1.7, 4H+1H+15m, LONG+SHORT) durduruldu.
-Onun yerine, paper_bot_v2'de (sanal) test edilen ve daha güçlü çekirdek
-performans gösteren strateji gerçek paraya alındı:
+⚠️ BU BOT GERÇEK EMİR AÇMAZ. Sadece canlı fiyatlarla simülasyon
+yapar, sonuçları kaydeder.
 
-KARŞILAŞTIRMA (trend dönüş ajanı hariç, sadece çekirdek strateji):
-  Eski (4H+1H, LONG+SHORT): +$6.34 net / 49 işlem = +$0.13/işlem
-  Yeni (1D+4H+1H, LONG-only): +$17.61 net / 25 işlem = +$0.70/işlem
-  -> Yeni strateji işlem başına ~5.4 KAT daha karlı (paper modda ölçüldü)
+GEREKÇE: Şimdiye kadar 6 farklı fikir gerçek Bitget verisiyle test
+edildi (trend kovalama, swing dip/tepe, FVG, likidasyon süpürme
+yaklaşımı, volatilite sıkışması+kırılım, 2li zaman dilimi uyumu).
+İki bulgu tekrar tekrar doğrulandı:
+  1) Üst zaman dilimi trend filtresi (4H+1H uyumu) tek başına en
+     büyük iyileştirmeyi sağladı (+76.64$/811 işlem, %50.1 kazanma)
+  2) SHORT taraf HER testte LONG'dan belirgin zayıf çıktı
 
-TREND DÖNÜŞ AJANI (hem eski live_bot'ta hem paper_bot_v2'de test edildi,
-İKİSİNDE DE net zarar verdiği görüldü: live_bot -$3.90/-$8.98,
-paper_bot_v2 -$2.80/-$8.98) - KULLANICI KARARIYLA VARSAYILAN KAPALI.
-Kod silinmedi, TREND_AJANI_AKTIF=true ile tekrar açılabilir.
+Bu bot ikisini birleştirip BİR KAT DAHA İLERİ GÖTÜRÜYOR: filtreye
+1D (günlük) trend de eklenerek ÜÇLÜ uyum isteniyor, ve SADECE LONG
+alınıyor. Backtest (78 coin, ~15 gün, gerçek Bitget verisi):
+  290 işlem, %58.6 kazanma, net +74.44$, ortalama işlem +0.257$
+  (2li uyum LONG+SHORT: 811 işlem, %50.1 kazanma, net +76.64$,
+  ortalama işlem +0.094$ — bu yeni yaklaşım İŞLEM BAŞINA 2.7 KAT
+  daha karlı, çok daha az işlemle neredeyse aynı toplam kârı üretti)
 
 MANTIK:
   1) 1D trend YUKARI olmalı (20 periyot MA)
   2) 4H trend YUKARI olmalı
   3) 1H trend YUKARI olmalı
-  4) Üçü uyumlu değilse sinyal YOK
-  5) 15m'de swing dip + dönüş onayı → LONG (SADECE LONG)
+  4) Üçü de uyumlu değilse sinyal YOK
+  5) 15m'de swing dip + dönüş onayı (son 20 mumun dibi son 3 mumda
+     yapıldı + şu anki mum yukarı kapandı) → LONG gir
 
-Çıkış: SL (swing bazlı, geniş, hedef ~$0.90 kayıp) + İZ SÜREN TP
-(1.0R aktifleşme, 0.5R geri çekilme).
+TREND DÖNÜŞ AJANI: Pozisyon açıkken 1D+4H+1H uyumu periyodik olarak
+(15dk'da bir) yeniden kontrol edilir. Üçünden biri bile artık
+"yukselis" değilse VE bu 2 ardışık kontrolde (30dk) teyit edilirse,
+SL beklenmeden pozisyon erken kapatılır - "trend_degisti" etiketiyle.
 
-⚠️ DÜRÜSTLÜK NOTU: Bu strateji paper modda ~69 işlemlik veriyle test
-edildi, gerçek parada henüz sıfırdan başlıyor. Paper performansı gerçek
-paraya birebir aktarılacağının garantisi yok - izlemeye devam edilecek.
+⚠️ DÜRÜSTLÜK NOTU: Bu strateji hiç canlı test edilmedi. Backtest
+sonucu umut verici ama KANITLANMIŞ değil - önceki 5 fikrin de
+mantıklı görünüp gerçek performansı değişken çıktığını gördük.
 ════════════════════════════════════════════════════════
 """
 
@@ -48,7 +56,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                      stream=sys.stdout, force=True)
-log = logging.getLogger("LIVE_BOT_V2")
+log = logging.getLogger("PAPER_BOT_V2")
 
 # ════════════════════════════════════════════
 # CONFIG
@@ -92,10 +100,11 @@ def yetkili_mi(msg_or_call):
 
 SLUGGISH_BASE = {"BTC", "ETH", "XRP", "ADA", "DOGE", "BNB", "TRX", "LINK", "LTC", "BCH"}
 
-# ── GERÇEK işlem parametreleri ──
-SABIT_MARJIN_USDT = float(os.getenv("SABIT_MARJIN_USDT", "1.0"))
+# ── SANAL (paper) işlem parametreleri ──
+BASLANGIC_BAKIYE_USDT = float(os.getenv("BASLANGIC_BAKIYE_USDT", "50.0"))
+SANAL_MARJIN_USDT = float(os.getenv("SANAL_MARJIN_USDT", "5.0"))
 LEV = 10
-NOTIONAL = SABIT_MARJIN_USDT * LEV
+NOTIONAL = SANAL_MARJIN_USDT * LEV
 MAX_POS = int(os.getenv("MAX_POS", "3"))
 
 LOOKBACK_15M = 20
@@ -105,36 +114,31 @@ MIN_SL_PCT = 0.05
 TARGET_MAX_LOSS_USDT = float(os.getenv("TARGET_MAX_LOSS_USDT", "0.90"))
 MAX_SL_PCT_TAVAN = TARGET_MAX_LOSS_USDT / NOTIONAL
 IZ_SURME_R_ORANI = 1.0
-IZ_SURME_GERI_COKME_ORANI = float(os.getenv("IZ_SURME_GERI_COKME_ORANI", "0.3"))
+IZ_SURME_GERI_COKME_ORANI = 0.5
 KOMISYON_PCT = float(os.getenv("KOMISYON_PCT", "0.0006"))
+FUNDING_PCT_8SAAT = 0.0001
 COOLDOWN_SAAT = 1.0
 MAX_HOLD_SAAT = 24
 KONTROL_ARALIGI_SN = 60
 ADAY_HAVUZU_BUYUKLUGU = 80
 
-# TREND DÖNÜŞ AJANI - KULLANICI KARARI (14.08.2026): hem eski live_bot'ta
-# hem paper_bot_v2'de gerçek/sanal veri ile test edildi, İKİSİNDE DE net
-# zarar verdiği görüldü. Varsayılan KAPALI - kod silinmedi,
-# TREND_AJANI_AKTIF=true ortam değişkeniyle tekrar açılabilir.
-TREND_AJANI_AKTIF = os.getenv("TREND_AJANI_AKTIF", "false").lower() == "true"
 TREND_KONTROL_ARALIGI_SN = int(os.getenv("TREND_KONTROL_ARALIGI_SN", "900"))
 TREND_TERS_TEYIT_SAYISI = int(os.getenv("TREND_TERS_TEYIT_SAYISI", "2"))
 TREND_TERS_TEYIT_KISMI_SAYISI = int(os.getenv("TREND_TERS_TEYIT_KISMI_SAYISI", "4"))
+# KULLANICI KARARI (14.08.2026): live_bot'taki (gerçek para) iki kademeli
+# mantığın aynısı buraya da uygulandı - çoğunluk (2-3 zaman dilimi) bozulunca
+# hızlı teyit, sadece biri bozulunca daha uzun/temkinli teyit.
 
-TRADE_STATE_PATH = os.getenv("TRADE_STATE_PATH", "/data/live2_state.json")
-COOLDOWN_PATH = os.getenv("COOLDOWN_PATH", "/data/live2_cooldown.json")
-TRADE_LOG_PATH = os.getenv("TRADE_LOG_PATH", "/data/live2_log.json")
-BLOKE_PATH = os.getenv("BLOKE_PATH", "/data/live2_bloke.json")
+TRADE_STATE_PATH = os.getenv("TRADE_STATE_PATH", "/data/paperv2_state.json")
+COOLDOWN_PATH = os.getenv("COOLDOWN_PATH", "/data/paperv2_cooldown.json")
+TRADE_LOG_PATH = os.getenv("TRADE_LOG_PATH", "/data/paperv2_log.json")
 
 trade_state = {}
 state_lock = threading.Lock()
-acilis_rezervasyonlari = {}
 trade_log = []
 log_lock = threading.Lock()
 son_kapanis_zamani = {}
 cooldown_lock = threading.Lock()
-bloke_coinler = set()
-bloke_lock = threading.Lock()
 
 
 def atomik_yaz(path, veri):
@@ -178,23 +182,6 @@ def cooldown_diske_yaz():
 def cooldown_diskten_yukle():
     global son_kapanis_zamani
     son_kapanis_zamani = guvenli_oku(COOLDOWN_PATH, {})
-
-
-def bloke_diske_yaz():
-    with bloke_lock:
-        veri = sorted(bloke_coinler)
-    atomik_yaz(BLOKE_PATH, veri)
-
-
-def bloke_diskten_yukle():
-    global bloke_coinler
-    bloke_coinler = set(guvenli_oku(BLOKE_PATH, []))
-
-
-def coin_bloke_mi(sym):
-    baz = sym.split("/")[0].upper()
-    with bloke_lock:
-        return baz in bloke_coinler
 
 
 def trade_log_kaydet(kayit):
@@ -243,52 +230,16 @@ def cooldown_da_mi(sym):
     return (time.time() - son) < COOLDOWN_SAAT * 3600
 
 
-def gercek_bakiye_al():
-    try:
-        bakiye = exchange.fetch_balance()
-        usdt = bakiye.get("USDT", {})
-        return safe(usdt.get("total", 0)) or safe(usdt.get("free", 0))
-    except Exception as e:
-        log.warning(f"[BAKIYE] {e}")
-        return None
-
-
-_market_cache = {"markets": None, "ts": 0}
-
-
-def market_bilgisi_al():
-    if _market_cache["markets"] is None or (time.time() - _market_cache["ts"]) > 3600:
-        try:
-            _market_cache["markets"] = exchange.load_markets()
-            _market_cache["ts"] = time.time()
-        except Exception as e:
-            log.warning(f"[MARKET_BILGI] {e}")
-    return _market_cache["markets"] or {}
-
-
-def sembol_max_kaldirac(sym, istenen_lev):
-    try:
-        markets = market_bilgisi_al()
-        m = markets.get(sym)
-        if not m:
-            return istenen_lev
-        max_lev = (m.get("limits", {}) or {}).get("leverage", {}).get("max")
-        if max_lev is None:
-            return istenen_lev
-        return min(istenen_lev, int(max_lev))
-    except Exception:
-        return istenen_lev
-
-
 def aday_havuzu():
-    # RWA (tokenize hisse senedi) filtresi - live_bot v1.1'de eklenen
-    # kritik düzeltme buraya da taşındı.
     try:
         tickers = exchange.fetch_tickers()
     except Exception as e:
         log.warning(f"[TICKERS] {e}")
         return []
-    markets = market_bilgisi_al()
+    try:
+        markets = exchange.load_markets()
+    except Exception:
+        markets = {}
     adaylar = []
     for sym, t in tickers.items():
         if not sym.endswith("/USDT:USDT"):
@@ -325,6 +276,9 @@ def trend_yonu(df, periyot=MA_PERIYOT):
 
 
 def ucyon_sinyal(sym):
+    """1D, 4H, 1H üçü de yükselişte olmalı - biri bile değilse sinyal yok.
+    Üçü de uyumluysa, 15m'de swing dip + dönüş onayı aranır (SADECE LONG,
+    backtest'te SHORT tarafı defalarca zayıf çıktığı için)."""
     df_1d = get_df(sym, "1d", MA_PERIYOT + 10)
     df_4h = get_df(sym, "4h", MA_PERIYOT + 5)
     df_1h = get_df(sym, "1h", MA_PERIYOT + 5)
@@ -354,273 +308,124 @@ def ucyon_sinyal(sym):
 
 
 # ════════════════════════════════════════════
-# GERÇEK POZİSYON AÇMA/KAPATMA
+# SANAL (PAPER) POZİSYON AÇMA/KAPATMA - GERÇEK EMİR YOK
 # ════════════════════════════════════════════
-def acilis_basarisiz_cooldown_uygula(sym):
+def sanal_pozisyon_ac(sinyal):
+    sym = sinyal["symbol"]
+    with state_lock:
+        if sym in trade_state or len(trade_state) >= MAX_POS:
+            return
+        entry = sinyal["entry"]
+        swing_nokta = sinyal["swing_nokta"]
+
+        sl = swing_nokta * (1 - SL_BUFFER_PCT)
+        sl_mesafe = max(MIN_SL_PCT, min(MAX_SL_PCT_TAVAN, (entry - sl) / entry))
+        sl = entry * (1 - sl_mesafe)
+
+        r_risk = abs(entry - sl)
+        trade_state[sym] = {
+            "entry": entry, "sl": sl, "yon": "long", "r_risk": r_risk,
+            "acilis_zamani": time.time(), "en_iyi_kar": None, "iz_aktif": False,
+            "1d": sinyal["1d"], "4h": sinyal["4h"], "1h": sinyal["1h"],
+            "notional": NOTIONAL, "son_trend_kontrol": 0, "ters_trend_sayisi": 0,
+        }
+    durumu_diske_yaz()
+    tg(f"📝 SANAL POZİSYON (paper v2): {sym} LONG\n"
+       f"Giriş≈{entry:.6f} | SL:{sl:.6f} (%{sl_mesafe*100:.1f})\n"
+       f"1D:{sinyal['1d']} | 4H:{sinyal['4h']} | 1H:{sinyal['1h']} (üçlü uyumlu)\n"
+       f"⚠️ Gerçek emir AÇILMADI - bu sadece simülasyon.")
+
+
+def sanal_pozisyon_kapat(sym, cikis_fiyat, sebep):
+    with state_lock:
+        durum = trade_state.pop(sym, None)
+    if not durum:
+        return
+    durumu_diske_yaz()
     with cooldown_lock:
         son_kapanis_zamani[sym] = time.time()
     cooldown_diske_yaz()
 
-
-def gercek_pozisyon_ac(sinyal):
-    sym = sinyal["symbol"]
-
-    if coin_bloke_mi(sym):
-        log.info(f"[COIN_BLOKE] {sym} engelli, açılış atlanıyor")
-        return
-
-    with state_lock:
-        if sym in trade_state or sym in acilis_rezervasyonlari:
-            return
-        if len(trade_state) + len(acilis_rezervasyonlari) >= MAX_POS:
-            return
-        acilis_rezervasyonlari[sym] = True
-
-    try:
-        _gercek_pozisyon_ac_ic(sym, sinyal)
-    finally:
-        with state_lock:
-            acilis_rezervasyonlari.pop(sym, None)
-
-
-def _gercek_pozisyon_ac_ic(sym, sinyal):
-    if cooldown_da_mi(sym):
-        return
-
-    bakiye = gercek_bakiye_al()
-    if bakiye is None or bakiye <= 0:
-        tg(f"⚠️ {sym} atlandı — bakiye alınamadı")
-        acilis_basarisiz_cooldown_uygula(sym)
-        return
-
-    entry_hedef = sinyal["entry"]
-    swing_nokta = sinyal["swing_nokta"]
-
-    sl = swing_nokta * (1 - SL_BUFFER_PCT)
-    sl_mesafe = max(MIN_SL_PCT, min(MAX_SL_PCT_TAVAN, (entry_hedef - sl) / entry_hedef))
-    sl = entry_hedef * (1 - sl_mesafe)
-
-    if sl_mesafe <= 0:
-        acilis_basarisiz_cooldown_uygula(sym)
-        return
-
-    LEV_KULLANILAN = sembol_max_kaldirac(sym, LEV)
-    notional = SABIT_MARJIN_USDT * LEV_KULLANILAN
-    amount = notional / entry_hedef
-
-    try:
-        qty = float(exchange.amount_to_precision(sym, amount))
-    except Exception as e:
-        log.warning(f"[MIKTAR] {sym}: {e}")
-        acilis_basarisiz_cooldown_uygula(sym)
-        return
-    if qty <= 0:
-        acilis_basarisiz_cooldown_uygula(sym)
-        return
-
-    try:
-        exchange.set_leverage(LEV_KULLANILAN, sym)
-        time.sleep(0.3)
-    except Exception as e:
-        log.warning(f"[KALDIRAC] {sym}: {e}")
-
-    try:
-        exchange.create_market_order(sym, "buy", qty)
-    except Exception as e:
-        tg(f"⚠️ {sym} giriş emri başarısız: {e}")
-        acilis_basarisiz_cooldown_uygula(sym)
-        return
-
-    time.sleep(0.8)
-    entry = entry_hedef
-    try:
-        pozlar = exchange.fetch_positions([sym])
-        gercek_pos = next((p for p in pozlar if safe(p.get("contracts")) > 0), None)
-        if gercek_pos and safe(gercek_pos.get("entryPrice")) > 0:
-            entry = safe(gercek_pos.get("entryPrice"))
-            sl = entry * (1 - sl_mesafe)
-    except Exception as e:
-        log.warning(f"[GERCEK_POZ] {sym}: {e}")
-
-    r_risk = abs(entry - sl)
-
-    sl_emir_id = None
-    sl_fiyat = float(exchange.price_to_precision(sym, sl))
-    for deneme in range(3):
-        try:
-            sl_emri = exchange.create_order(sym, "market", "sell", qty, None,
-                                             {"reduceOnly": True, "stopLossPrice": sl_fiyat})
-            sl_emir_id = sl_emri.get("id")
-            if sl_emir_id:
-                break
-        except Exception as e:
-            log.warning(f"[SL] {sym} deneme {deneme+1}/3: {e}")
-        time.sleep(0.5)
-
-    if not sl_emir_id:
-        tg(f"🚨 {sym} SL yerleştirilemedi, güvenlik amaçlı kapatılıyor.")
-        try:
-            exchange.create_market_order(sym, "sell", qty, params={"reduceOnly": True})
-        except Exception:
-            pass
-        acilis_basarisiz_cooldown_uygula(sym)
-        return
-
-    with state_lock:
-        trade_state[sym] = {
-            "entry": entry, "sl": sl, "sl_emir_id": sl_emir_id, "yon": "long", "qty": qty,
-            "r_risk": r_risk, "acilis_zamani": time.time(), "en_iyi_kar": None, "iz_aktif": False,
-            "1d": sinyal["1d"], "4h": sinyal["4h"], "1h": sinyal["1h"], "notional": notional,
-            "son_trend_kontrol": 0, "ters_trend_sayisi": 0, "kismi_ters_sayisi": 0,
-        }
-    durumu_diske_yaz()
-
-    risk_dolar = r_risk * qty
-    iz_esik = risk_dolar * IZ_SURME_R_ORANI
-    gc_esik = risk_dolar * IZ_SURME_GERI_COKME_ORANI
-    tg(f"📈 GERÇEK POZİSYON: {sym} LONG\n"
-       f"Giriş≈{entry:.6f} | SL:{sl_fiyat:.6f} (%{sl_mesafe*100:.1f})\n"
-       f"1D:{sinyal['1d']} | 4H:{sinyal['4h']} | 1H:{sinyal['1h']} (üçlü uyumlu)\n"
-       f"TP: İZ SÜREN — ${iz_esik:.2f} kârda aktifleşir (1.0R), en iyi kârdan "
-       f"${gc_esik:.2f} geri çekilirse kapanır (0.5R)\n"
-       f"Notional≈${notional:.2f} ({LEV_KULLANILAN}x) | Marjin: ${SABIT_MARJIN_USDT:.2f}")
-
-
-def gercek_pozisyon_kapat(sym, sebep="manuel"):
-    try:
-        pozlar = exchange.fetch_positions([sym])
-        gercek_pos = next((p for p in pozlar if safe(p.get("contracts")) > 0), None)
-        with state_lock:
-            durum = trade_state.get(sym)
-
-        if not gercek_pos:
-            with state_lock:
-                trade_state.pop(sym, None)
-            durumu_diske_yaz()
-            with cooldown_lock:
-                son_kapanis_zamani[sym] = time.time()
-            cooldown_diske_yaz()
-            if durum:
-                _kapanis_kaydet_gercek_veriyle(sym, durum, sebep)
-            return True, "kapatildi"
-
-        qty = safe(gercek_pos.get("contracts"))
-        entry_fiyat = safe(gercek_pos.get("entryPrice"))
-
-        if durum and durum.get("sl_emir_id"):
-            try:
-                exchange.cancel_order(durum["sl_emir_id"], sym)
-            except Exception:
-                pass
-
-        kapama_emri = exchange.create_market_order(sym, "sell", qty, params={"reduceOnly": True})
-        time.sleep(1)
-        cikis_fiyat = None
-        try:
-            detay = exchange.fetch_order(kapama_emri.get("id"), sym)
-            dolum = safe(detay.get("average")) or safe(detay.get("price"))
-            if dolum > 0:
-                cikis_fiyat = dolum
-        except Exception:
-            pass
-        if not cikis_fiyat:
-            try:
-                t = exchange.fetch_ticker(sym)
-                cikis_fiyat = safe(t["last"])
-            except Exception:
-                cikis_fiyat = entry_fiyat
-
-        pnl = (cikis_fiyat - entry_fiyat) * qty
-        trade_log_kaydet({"symbol": sym, "entry": entry_fiyat, "exit": cikis_fiyat, "pnl": pnl,
-                           "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
-                           "not": sebep, "1d": (durum or {}).get("1d"), "4h": (durum or {}).get("4h"),
-                           "1h": (durum or {}).get("1h")})
-        with state_lock:
-            trade_state.pop(sym, None)
-        durumu_diske_yaz()
-        with cooldown_lock:
-            son_kapanis_zamani[sym] = time.time()
-        cooldown_diske_yaz()
-        tg(f"{'🟢' if pnl>=0 else '🔴'} GERÇEK kapandı: {sym} [{sebep}] PnL≈{pnl:+.2f}$")
-        return True, f"✅ {sym} kapatıldı | PnL≈{pnl:+.2f}$"
-    except Exception as e:
-        return False, f"⚠️ {sym} kapatma hatası: {e}"
-
-
-def _kapanis_kaydet_gercek_veriyle(sym, durum, sebep):
-    """Pozisyon borsada bizden önce kapanmış - gerçek çıkış fiyatını
-    borsanın işlem geçmişinden çekiyoruz, hiçbir zaman tahmin yapmıyoruz."""
     entry = durum["entry"]
-    qty = durum.get("qty", 0)
-    cikis_fiyat = None
-    sl_id = durum.get("sl_emir_id")
-    if sl_id:
-        try:
-            detay = exchange.fetch_order(sl_id, sym)
-            if detay.get("status") in ("closed", "filled"):
-                dolum = safe(detay.get("average")) or safe(detay.get("price"))
-                if dolum > 0:
-                    cikis_fiyat = dolum
-        except Exception as e:
-            log.warning(f"[SL_KONTROL] {sym}: {e}")
-    if not cikis_fiyat:
-        try:
-            son_islemler = exchange.fetch_my_trades(sym, limit=10)
-            kapanis_zamani_ms = durum["acilis_zamani"] * 1000
-            adaylar = [t for t in son_islemler if t.get("timestamp", 0) > kapanis_zamani_ms]
-            if adaylar:
-                son_islem = max(adaylar, key=lambda t: t.get("timestamp", 0))
-                dolum = safe(son_islem.get("price"))
-                if dolum > 0:
-                    cikis_fiyat = dolum
-        except Exception as e:
-            log.warning(f"[ISLEM_GECMISI] {sym}: {e}")
-    if not cikis_fiyat:
-        try:
-            t = exchange.fetch_ticker(sym)
-            cikis_fiyat = safe(t["last"])
-        except Exception:
-            cikis_fiyat = entry
+    poz_notional = durum.get("notional", NOTIONAL)
+    pnl_pct = (cikis_fiyat - entry) / entry
+    brut_pnl = pnl_pct * poz_notional
+    komisyon_maliyeti = KOMISYON_PCT * poz_notional * 2
+    sure_saat = (time.time() - durum["acilis_zamani"]) / 3600
+    funding_periyot = int(sure_saat // 8)
+    funding_maliyeti = FUNDING_PCT_8SAAT * poz_notional * funding_periyot
+    net_pnl = brut_pnl - komisyon_maliyeti - funding_maliyeti
 
-    pnl = (cikis_fiyat - entry) * qty
-    trade_log_kaydet({"symbol": sym, "entry": entry, "exit": cikis_fiyat, "pnl": pnl,
-                       "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
-                       "not": sebep, "1d": durum.get("1d"), "4h": durum.get("4h"), "1h": durum.get("1h")})
-    tg(f"{'🟢' if pnl>=0 else '🔴'} GERÇEK kapandı: {sym} [{sebep}] PnL≈{pnl:+.2f}$ (borsada önceden kapanmış)")
+    iz_aktif = durum.get("iz_aktif", False)
+    en_iyi_kar = durum.get("en_iyi_kar")
+
+    trade_log_kaydet({"symbol": sym, "entry": entry, "exit": cikis_fiyat,
+                       "brut_pnl": brut_pnl, "komisyon": komisyon_maliyeti, "funding": funding_maliyeti,
+                       "pnl": net_pnl, "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+                       "not": sebep, "1d": durum.get("1d"), "4h": durum.get("4h"), "1h": durum.get("1h"),
+                       "iz_surme_aktifti": iz_aktif, "en_iyi_kar": en_iyi_kar})
+
+    emoji = "🟢" if net_pnl >= 0 else "🔴"
+    sebep_etiket = {"sl": "SL vuruldu", "iz_suren_tp": "İz süren TP (geri çekilme)",
+                     "max_hold_timeout": "Max süre doldu", "trend_degisti": "Üst trend çoğunlukla değişti",
+                     "trend_kismi_degisti": "Üst trend kısmen değişti"}.get(sebep, sebep)
+
+    if iz_aktif and en_iyi_kar is not None:
+        iz_satiri = (f"\n🔒 İz sürme: AKTİFTİ | En iyi an: {en_iyi_kar:+.2f}$ | "
+                      f"Kapanışta: {net_pnl:+.2f}$ (geri çekilme: {en_iyi_kar - net_pnl:.2f}$)")
+    else:
+        iz_satiri = "\n🔓 İz sürme: hiç aktifleşmedi"
+
+    funding_satiri = f" | Funding: -{funding_maliyeti:.2f}$ ({funding_periyot}x)" if funding_periyot > 0 else ""
+    tg(f"{emoji} SANAL kapandı: {sym} [{sebep_etiket}]\n"
+       f"Giriş:{entry:.6f} → Çıkış:{cikis_fiyat:.6f} (%{pnl_pct*100:+.2f} hareket)\n"
+       f"Brüt PnL: {brut_pnl:+.2f}$ | Komisyon: -{komisyon_maliyeti:.2f}${funding_satiri}\n"
+       f"💰 Net PnL: {net_pnl:+.2f}$ (simülasyon, gerçek para değil)"
+       f"{iz_satiri}")
 
 
 # ════════════════════════════════════════════
 # PANEL
 # ════════════════════════════════════════════
-def panel_ozet_metni():
-    with log_lock:
-        gecmis = list(trade_log)
-    gercek_bakiye = gercek_bakiye_al()
-    bakiye_metni = f"{gercek_bakiye:,.2f}$" if gercek_bakiye is not None else "alınamadı"
-    with state_lock:
-        acik_sayi = len(trade_state)
-
-    gerceklesmeyen_net = 0.0
-    acik_detay = []
+def acik_pozisyonlar_gercek_pnl():
     with state_lock:
         durumlar = dict(trade_state)
+    toplam = 0.0
+    detaylar = []
     for sym, d in durumlar.items():
         try:
             t = exchange.fetch_ticker(sym)
             guncel = safe(t["last"])
             entry = d["entry"]
             poz_notional = d.get("notional", NOTIONAL)
-            anlik = (guncel - entry) / entry * poz_notional
-            gerceklesmeyen_net += anlik
-            acik_detay.append((sym, anlik))
+            pnl_pct = (guncel - entry) / entry
+            anlik = pnl_pct * poz_notional
+            toplam += anlik
+            detaylar.append((sym, anlik))
         except Exception:
             continue
+    return toplam, detaylar
 
+
+def panel_ozet_metni():
+    with log_lock:
+        gecmis = list(trade_log)
+    gerceklesen_net = sum(t["pnl"] for t in gecmis)
+    gerceklesmeyen_net, acik_detay = acik_pozisyonlar_gercek_pnl()
+    with state_lock:
+        acik_sayi = len(trade_state)
+
+    guncel_bakiye = BASLANGIC_BAKIYE_USDT + gerceklesen_net
+    canli_toplam_deger = guncel_bakiye + gerceklesmeyen_net
+    toplam_getiri_pct = (canli_toplam_deger - BASLANGIC_BAKIYE_USDT) / BASLANGIC_BAKIYE_USDT * 100
+
+    kasa_emoji = "📈" if canli_toplam_deger >= BASLANGIC_BAKIYE_USDT else "📉"
     satirlar = [
-        "💵 LIVE BOT v2 — CANLI ÖZET",
-        "(GERÇEK PARA, 1D+4H+1H LONG-only)",
+        "🧪 PAPER BOT v2 — CANLI ÖZET",
+        "(sanal kasa, 1D+4H+1H uyum + LONG-only)",
         "━━━━━━━━━━━━━━━━━━━━",
-        f"💼 Bakiye (borsa): {bakiye_metni}",
+        f"{kasa_emoji} Toplam Değer:  {canli_toplam_deger:,.2f}$   ({toplam_getiri_pct:+.1f}%)",
+        f"💼 Kasa (gerçekleşen): {guncel_bakiye:,.2f}$  (başlangıç: {BASLANGIC_BAKIYE_USDT:,.2f}$)",
     ]
     if acik_sayi > 0:
         gc_emoji = "🟢" if gerceklesmeyen_net >= 0 else "🔴"
@@ -630,57 +435,71 @@ def panel_ozet_metni():
     if gecmis:
         toplam = len(gecmis)
         kazanan = [t for t in gecmis if t["pnl"] > 0]
-        net = sum(t["pnl"] for t in gecmis)
+        brut_toplam = sum(t.get("brut_pnl", t["pnl"]) for t in gecmis)
+        toplam_komisyon = sum(t.get("komisyon", 0) for t in gecmis)
+        toplam_funding = sum(t.get("funding", 0) for t in gecmis)
         wr = len(kazanan) / toplam * 100
         satirlar.append("📊 İstatistik")
         satirlar.append(f"  Toplam işlem: {toplam}  |  Kazanma: %{wr:.1f}")
-        satirlar.append(f"  Net PnL: {net:+.2f}$  |  Ortalama: {net/toplam:+.3f}$\n")
+        satirlar.append(f"  Brüt PnL: {brut_toplam:+.2f}$  |  Maliyet: -{toplam_komisyon+toplam_funding:.2f}$")
+        satirlar.append(f"  Ortalama işlem: {gerceklesen_net/toplam:+.3f}$\n")
         satirlar.append("📋 Son 5 işlem:")
         for t in list(reversed(gecmis))[:5]:
             emoji = "🟢" if t["pnl"] >= 0 else "🔴"
             sebep = t.get("not", "")
             satirlar.append(f"  {emoji} {t['symbol'].split('/')[0]:<8} {t['pnl']:+.2f}$  ({sebep})")
     else:
-        satirlar.append("Henüz kapanan işlem yok.")
+        satirlar.append("Henüz kapanan sanal işlem yok.")
 
     satirlar.append(f"\n📈 Açık pozisyon: {acik_sayi}/{MAX_POS}")
-    for sym, anlik in acik_detay:
-        e = "🟢" if anlik >= 0 else "🔴"
-        satirlar.append(f"  {e} {sym.split('/')[0]:<8} {anlik:+.2f}$")
+    if acik_detay:
+        for sym, anlik in acik_detay:
+            e = "🟢" if anlik >= 0 else "🔴"
+            satirlar.append(f"  {e} {sym.split('/')[0]:<8} {anlik:+.2f}$")
     return "\n".join(satirlar)
 
 
 def panel_ayarlar_metni():
-    return ("⚙️ LIVE BOT v2 AYARLARI\n\n"
-            "Sürüm: v2.0 (eski live_bot v1.7'nin yerine geçti - 1D+4H+1H "
-            "uyum + LONG-only, paper_bot_v2'de test edilen daha güçlü strateji)\n\n"
-            "💰 BU BOT GERÇEK PARA KULLANIYOR.\n\n"
+    return ("⚙️ PAPER BOT v2 AYARLARI\n\n"
+            "Sürüm: v2.0 (1D+4H+1H üçlü uyum, LONG-only, trend dönüş ajanı dahil)\n\n"
+            "🧪 Bu bot SANAL modda çalışır — hiçbir gerçek emir açılmaz.\n\n"
             "Strateji: Üçlü zaman dilimi trend uyumu\n"
-            "  1) 1D trend YUKARI olmalı\n"
+            "  1) 1D trend YUKARI olmalı (20 periyot MA)\n"
             "  2) 4H trend YUKARI olmalı\n"
             "  3) 1H trend YUKARI olmalı\n"
-            "  4) 15m'de swing dip + dönüş onayı → LONG (SADECE LONG)\n\n"
-            f"Kaldıraç: {LEV}x | Marjin: sabit ${SABIT_MARJIN_USDT:.2f}\n"
+            "  4) Üçü uyumlu değilse sinyal yok\n"
+            "  5) 15m'de swing dip + dönüş onayı → LONG (SADECE LONG)\n\n"
+            f"Backtest (78 coin/~15 gün): 290 işlem, %58.6 kazanma, net +74.44$\n"
+            f"(2li uyum LONG+SHORT: 811 işlem, %50.1 kazanma, net +76.64$ — "
+            f"bu yeni yaklaşım işlem başına 2.7 kat daha karlı)\n\n"
+            f"Kaldıraç: {LEV}x (sanal) | Sanal marjin: ${SANAL_MARJIN_USDT:.2f}\n"
             f"MAX_POS: {MAX_POS}\n"
             f"SL: swing bazlı, taban %{MIN_SL_PCT*100:.0f}, hedef kayıp≈${TARGET_MAX_LOSS_USDT:.2f}\n"
             f"TP: İZ SÜREN — {IZ_SURME_R_ORANI:.1f}R aktifleşme, {IZ_SURME_GERI_COKME_ORANI:.1f}R geri çekilme\n\n"
-            f"🔄 TREND DÖNÜŞ AJANI: {'AKTİF' if TREND_AJANI_AKTIF else 'KAPALI (kullanıcı kararı)'}\n"
-            f"  Eski live_bot'ta VE paper_bot_v2'de gerçek/sanal veriyle test "
-            f"edildi, İKİSİNDE DE net zarar verdiği görüldü - varsayılan kapalı.\n\n"
-            "⚠️ Bu strateji paper modda ~69 işlemle test edildi (çekirdek: "
-            "+$17.61/25 işlem), gerçek parada sıfırdan başlıyor.")
+            f"🔄 TREND DÖNÜŞ AJANI: {TREND_KONTROL_ARALIGI_SN//60}dk'da bir 1D+4H+1H "
+            f"uyumu tekrar kontrol edilir. Biri bile artık yükselişte değilse VE bu "
+            f"{TREND_TERS_TEYIT_SAYISI} ardışık kontrolde teyit edilirse, SL beklenmeden "
+            f"pozisyon erken kapatılır.\n\n"
+            "⚠️ Bu strateji hiç canlı test edilmedi - istatistiksel doğrulama yok.")
 
 
 def panel_gecmis_metni():
     with log_lock:
         gecmis = list(trade_log)
     if not gecmis:
-        return "📜 Henüz kapanan işlem yok."
-    satirlar = ["📜 SON 15 İŞLEM\n"]
+        return "📜 Henüz kapanan sanal işlem yok."
+    satirlar = ["📜 SON 15 SANAL İŞLEM\n"]
     for t in list(reversed(gecmis))[:15]:
         emoji = "🟢" if t["pnl"] >= 0 else "🔴"
+        sebep = {"sl": "SL", "iz_suren_tp": "iz süren TP", "max_hold_timeout": "max süre",
+                 "trend_degisti": "trend çoğunlukla değişti", "trend_kismi_degisti": "trend kısmen değişti"}.get(t.get("not"), t.get("not", "?"))
+        iz_bilgi = ""
+        if t.get("iz_surme_aktifti"):
+            en_iyi = t.get("en_iyi_kar")
+            if en_iyi is not None:
+                iz_bilgi = f" | en iyi:{en_iyi:+.2f}$"
         satirlar.append(f"{emoji} {t['symbol'].split('/')[0]} LONG {t['pnl']:+.2f}$ "
-                         f"[{t.get('not','?')}]\n   {t['zaman']} | 1D:{t.get('1d','?')}/4H:{t.get('4h','?')}/1H:{t.get('1h','?')}")
+                         f"[{sebep}]{iz_bilgi}\n   {t['zaman']} | 1D:{t.get('1d','?')}/4H:{t.get('4h','?')}/1H:{t.get('1h','?')}")
     return "\n".join(satirlar)
 
 
@@ -688,13 +507,26 @@ def panel_analiz_metni():
     with log_lock:
         gecmis = list(trade_log)
     if not gecmis:
-        return "🔬 ANALİZ\n\nHenüz kapanan işlem yok."
-    satirlar = ["🔬 ANALİZ\n", "🚪 Kapanış sebebine göre:"]
+        return "🔬 SANAL ANALİZ\n\nHenüz kapanan işlem yok."
+    satirlar = ["🔬 SANAL ANALİZ\n"]
+
+    satirlar.append("🚪 Kapanış sebebine göre:")
     for sebep in sorted(set(t.get("not", "?") for t in gecmis)):
         alt = [t for t in gecmis if t.get("not") == sebep]
         net = sum(t["pnl"] for t in alt)
         w = len([t for t in alt if t["pnl"] > 0])
         satirlar.append(f"  {sebep}: {len(alt)} işlem, %{w/len(alt)*100:.0f} kazanma, net {net:+.2f}$")
+
+    iz_aktif_olanlar = [t for t in gecmis if t.get("iz_surme_aktifti")]
+    if iz_aktif_olanlar:
+        satirlar.append(f"\n🔒 İz sürme aktifleşen işlemler: {len(iz_aktif_olanlar)}/{len(gecmis)}")
+        toplam_geri_cekilme = sum((t.get("en_iyi_kar", 0) or 0) - t["pnl"] for t in iz_aktif_olanlar)
+        satirlar.append(f"  Toplam geri çekilen kâr: {toplam_geri_cekilme:.2f}$")
+
+    trend_degisti_olanlar = [t for t in gecmis if t.get("not") == "trend_degisti"]
+    if trend_degisti_olanlar:
+        net_td = sum(t["pnl"] for t in trend_degisti_olanlar)
+        satirlar.append(f"\n🔄 Trend dönüş ajanı ile kapananlar: {len(trend_degisti_olanlar)} işlem, net {net_td:+.2f}$")
 
     coin_pnl = {}
     for t in gecmis:
@@ -717,9 +549,9 @@ def panel_analiz_metni():
 def panel_risk_metni():
     with state_lock:
         durumlar = dict(trade_state)
-    satirlar = ["📉 AÇIK POZİSYON DETAYI\n"]
+    satirlar = ["📉 AÇIK SANAL POZİSYON DETAYI\n"]
     if not durumlar:
-        satirlar.append("Açık pozisyon yok.")
+        satirlar.append("Açık sanal pozisyon yok.")
         return "\n".join(satirlar)
     for sym, d in durumlar.items():
         try:
@@ -732,10 +564,12 @@ def panel_risk_metni():
             en_iyi = d.get("en_iyi_kar")
             en_iyi_metin = f", en iyi: {en_iyi:+.2f}$" if en_iyi is not None else ""
             sure_dk = (time.time() - d["acilis_zamani"]) / 60
+            ters_sayac = d.get("ters_trend_sayisi", 0)
             satirlar.append(f"{sym} LONG (1D:{d.get('1d')}/4H:{d.get('4h')}/1H:{d.get('1h')})\n"
                              f"  Giriş:{entry:.6f} Şimdi:{guncel:.6f} (%{pnl_pct:+.2f})\n"
                              f"  Anlık PnL: {anlik_kar:+.2f}$ | SL:{d['sl']:.6f}\n"
                              f"  İz sürme: {iz_durum}{en_iyi_metin}\n"
+                             f"  Trend ters teyit: {ters_sayac}/{TREND_TERS_TEYIT_SAYISI}\n"
                              f"  Açık süre: {sure_dk:.0f} dk")
         except Exception:
             satirlar.append(f"{sym} (fiyat alınamadı)")
@@ -809,57 +643,6 @@ if bot:
             return
         bot.send_message(msg.chat.id, panel_ozet_metni())
 
-    @bot.message_handler(commands=["kapat"])
-    def kapat_komutu(msg):
-        if not yetkili_mi(msg):
-            return
-        with state_lock:
-            acik = list(trade_state.keys())
-        if not acik:
-            bot.send_message(msg.chat.id, "Açık pozisyon yok.")
-            return
-        parca = msg.text.replace("/kapat", "", 1).strip().upper()
-        if parca:
-            hedef = next((s for s in acik if s.split("/")[0] == parca), None)
-            if not hedef:
-                bot.send_message(msg.chat.id, f"'{parca}' bulunamadı: {acik}")
-                return
-        else:
-            if len(acik) > 1:
-                bot.send_message(msg.chat.id, f"Birden fazla pozisyon var: {acik}")
-                return
-            hedef = acik[0]
-        bot.send_message(msg.chat.id, f"⏳ {hedef} kapatılıyor...")
-        basari, mesaj = gercek_pozisyon_kapat(hedef)
-        bot.send_message(msg.chat.id, mesaj)
-
-    @bot.message_handler(commands=["blokla"])
-    def blokla_komutu(msg):
-        if not yetkili_mi(msg):
-            return
-        parca = msg.text.replace("/blokla", "", 1).strip().upper()
-        if not parca:
-            bot.send_message(msg.chat.id, "Kullanım: /blokla COIN_ADI")
-            return
-        with bloke_lock:
-            bloke_coinler.add(parca)
-        bloke_diske_yaz()
-        bot.send_message(msg.chat.id, f"🚫 {parca} engellendi.")
-
-    @bot.message_handler(commands=["blokkaldir"])
-    def blokkaldir_komutu(msg):
-        if not yetkili_mi(msg):
-            return
-        parca = msg.text.replace("/blokkaldir", "", 1).strip().upper()
-        if not parca:
-            bot.send_message(msg.chat.id, "Kullanım: /blokkaldir COIN_ADI")
-            return
-        with bloke_lock:
-            vardi = parca in bloke_coinler
-            bloke_coinler.discard(parca)
-        bloke_diske_yaz()
-        bot.send_message(msg.chat.id, f"✅ {parca} engeli kaldırıldı." if vardi else f"ℹ️ {parca} zaten engelli değildi.")
-
     @bot.message_handler(commands=["sifirlagecmis"])
     def sifirlagecmis_komutu(msg):
         if not yetkili_mi(msg):
@@ -877,14 +660,14 @@ if bot:
         with log_lock:
             veri = list(trade_log)
         if not veri:
-            bot.send_message(msg.chat.id, "Henüz kapanan işlem yok.")
+            bot.send_message(msg.chat.id, "Henüz kapanan sanal işlem yok.")
             return
         try:
             import io
             icerik = json.dumps(veri, ensure_ascii=False, indent=2)
             dosya = io.BytesIO(icerik.encode("utf-8"))
-            dosya.name = f"live2_log_{time.strftime('%Y%m%d_%H%M%S')}.json"
-            bot.send_document(msg.chat.id, dosya, caption=f"📦 {len(veri)} işlem")
+            dosya.name = f"paperv2_log_{time.strftime('%Y%m%d_%H%M%S')}.json"
+            bot.send_document(msg.chat.id, dosya, caption=f"📦 {len(veri)} sanal işlem")
         except Exception as e:
             bot.send_message(msg.chat.id, f"⚠️ Hata: {e}")
 
@@ -898,30 +681,6 @@ def telebot_polling_baslat():
         except Exception as e:
             log.error(f"[TELEBOT_POLL] {e}")
             time.sleep(5)
-
-
-def baslangic_uzlastirma():
-    try:
-        gercek_pozlar = exchange.fetch_positions()
-        gercek_semboller = {p["symbol"] for p in gercek_pozlar if safe(p.get("contracts")) > 0}
-    except Exception as e:
-        log.warning(f"[UZLASTIRMA] {e}")
-        return
-    with state_lock:
-        state_semboller = set(trade_state.keys())
-    sadece_diskte = state_semboller - gercek_semboller
-    for sym in sadece_diskte:
-        with state_lock:
-            trade_state.pop(sym, None)
-        with cooldown_lock:
-            son_kapanis_zamani[sym] = time.time()
-    if sadece_diskte:
-        durumu_diske_yaz()
-        cooldown_diske_yaz()
-    sadece_borsada = gercek_semboller - state_semboller
-    if sadece_borsada:
-        tg(f"⚠️ UYARI: borsada açık ama state'te olmayan pozisyonlar: {sorted(sadece_borsada)}\n"
-           f"(Eski live_bot'tan kalma bir pozisyon olabilir - manuel kontrol et.)")
 
 
 def manage_loop():
@@ -943,56 +702,72 @@ def manage_loop():
                     continue
 
                 if (time.time() - durum["acilis_zamani"]) > MAX_HOLD_SAAT * 3600:
-                    gercek_pozisyon_kapat(sym, "max_hold_timeout")
+                    sanal_pozisyon_kapat(sym, guncel, "max_hold_timeout")
                     continue
 
-                # TREND DÖNÜŞ AJANI - varsayılan KAPALI (kullanıcı kararı,
-                # hem eski live_bot'ta hem paper_bot_v2'de net zarar verdiği
-                # görüldü). TREND_AJANI_AKTIF=true ile tekrar açılabilir.
-                if TREND_AJANI_AKTIF:
-                    son_kontrol = durum.get("son_trend_kontrol", 0)
-                    if time.time() - son_kontrol >= TREND_KONTROL_ARALIGI_SN:
-                        try:
-                            y1d = trend_yonu(get_df(sym, "1d", MA_PERIYOT + 10))
-                            y4h = trend_yonu(get_df(sym, "4h", MA_PERIYOT + 5))
-                            y1h = trend_yonu(get_df(sym, "1h", MA_PERIYOT + 5))
-                            bozuk_sayisi = sum(1 for y in (y1d, y4h, y1h) if y != "yukselis")
-                            tam_ters = bozuk_sayisi >= 2
-                            kismi_ters = bozuk_sayisi == 1
+                # TREND DÖNÜŞ AJANI: 1D+4H+1H uyumu periyodik olarak yeniden
+                # kontrol edilir. v2.1 KULLANICI KARARI (14.08.2026): live_bot'ta
+                # (gerçek para) tek kademeli mantığın çok temkinli/çok gevşek
+                # olabildiği görüldü - artık İKİ KADEMELİ: ÇOĞUNLUK bozulmuşsa
+                # (3 zaman diliminden 2'si veya 3'ü artık yükselişte değil) daha
+                # HIZLI teyit (TREND_TERS_TEYIT_SAYISI), sadece BİRİ bozulmuşsa
+                # (daha zayıf/gürültülü sinyal) daha UZUN teyit
+                # (TREND_TERS_TEYIT_KISMI_SAYISI) isteniyor.
+                son_kontrol = durum.get("son_trend_kontrol", 0)
+                if time.time() - son_kontrol >= TREND_KONTROL_ARALIGI_SN:
+                    try:
+                        y1d = trend_yonu(get_df(sym, "1d", MA_PERIYOT + 10))
+                        y4h = trend_yonu(get_df(sym, "4h", MA_PERIYOT + 5))
+                        y1h = trend_yonu(get_df(sym, "1h", MA_PERIYOT + 5))
+                        bozuk_sayisi = sum(1 for y in (y1d, y4h, y1h) if y != "yukselis")
+                        tam_ters = bozuk_sayisi >= 2
+                        kismi_ters = bozuk_sayisi == 1
 
-                            with state_lock:
-                                if sym not in trade_state:
-                                    continue
-                                trade_state[sym]["son_trend_kontrol"] = time.time()
-                                if tam_ters:
-                                    trade_state[sym]["ters_trend_sayisi"] = trade_state[sym].get("ters_trend_sayisi", 0) + 1
-                                    trade_state[sym]["kismi_ters_sayisi"] = 0
-                                    sayac_tam = trade_state[sym]["ters_trend_sayisi"]
-                                    sayac_kismi = 0
-                                elif kismi_ters:
-                                    trade_state[sym]["kismi_ters_sayisi"] = trade_state[sym].get("kismi_ters_sayisi", 0) + 1
-                                    trade_state[sym]["ters_trend_sayisi"] = 0
-                                    sayac_kismi = trade_state[sym]["kismi_ters_sayisi"]
-                                    sayac_tam = 0
-                                else:
-                                    trade_state[sym]["ters_trend_sayisi"] = 0
-                                    trade_state[sym]["kismi_ters_sayisi"] = 0
-                                    sayac_tam = 0
-                                    sayac_kismi = 0
+                        with state_lock:
+                            if sym not in trade_state:
+                                continue
+                            trade_state[sym]["son_trend_kontrol"] = time.time()
+                            if tam_ters:
+                                trade_state[sym]["ters_trend_sayisi"] = trade_state[sym].get("ters_trend_sayisi", 0) + 1
+                                trade_state[sym]["kismi_ters_sayisi"] = 0
+                                sayac_tam = trade_state[sym]["ters_trend_sayisi"]
+                                sayac_kismi = 0
+                            elif kismi_ters:
+                                trade_state[sym]["kismi_ters_sayisi"] = trade_state[sym].get("kismi_ters_sayisi", 0) + 1
+                                trade_state[sym]["ters_trend_sayisi"] = 0
+                                sayac_kismi = trade_state[sym]["kismi_ters_sayisi"]
+                                sayac_tam = 0
+                            else:
+                                trade_state[sym]["ters_trend_sayisi"] = 0
+                                trade_state[sym]["kismi_ters_sayisi"] = 0
+                                sayac_tam = 0
+                                sayac_kismi = 0
 
-                            if tam_ters and sayac_tam >= TREND_TERS_TEYIT_SAYISI:
-                                tg(f"⚠️ {sym} — üst trend ÇOĞUNLUKLA bozuldu, kapatılıyor.")
-                                gercek_pozisyon_kapat(sym, "trend_degisti")
-                                continue
-                            elif kismi_ters and sayac_kismi >= TREND_TERS_TEYIT_KISMI_SAYISI:
-                                tg(f"⚠️ {sym} — üst trend KISMEN bozuldu, kapatılıyor.")
-                                gercek_pozisyon_kapat(sym, "trend_kismi_degisti")
-                                continue
-                        except Exception as e:
-                            log.warning(f"[TREND_KONTROL_HATA] {sym}: {e}")
+                        log.info(f"[TREND_KONTROL] {sym} 1d={y1d} 4h={y4h} 1h={y1h} bozuk={bozuk_sayisi}/3 "
+                                 f"tam_ters={tam_ters} sayac_tam={sayac_tam}/{TREND_TERS_TEYIT_SAYISI} "
+                                 f"kismi_ters={kismi_ters} sayac_kismi={sayac_kismi}/{TREND_TERS_TEYIT_KISMI_SAYISI}")
+
+                        if tam_ters and sayac_tam >= TREND_TERS_TEYIT_SAYISI:
+                            tg(f"⚠️ {sym} — üst trend uyumu ÇOĞUNLUKLA ({bozuk_sayisi}/3) {sayac_tam} kontrol "
+                               f"boyunca ardışık bozuldu, sanal pozisyon SL beklenmeden kapatılıyor.")
+                            sanal_pozisyon_kapat(sym, guncel, "trend_degisti")
+                            continue
+                        elif kismi_ters and sayac_kismi >= TREND_TERS_TEYIT_KISMI_SAYISI:
+                            tg(f"⚠️ {sym} — üst trend KISMEN (1/3) {sayac_kismi} kontrol boyunca ardışık "
+                               f"bozuldu, sanal pozisyon SL beklenmeden kapatılıyor.")
+                            sanal_pozisyon_kapat(sym, guncel, "trend_kismi_degisti")
+                            continue
+                        elif tam_ters:
+                            tg(f"👀 {sym} — üst trend ÇOĞUNLUKLA bozulmuş görünüyor ({bozuk_sayisi}/3), "
+                               f"{sayac_tam}/{TREND_TERS_TEYIT_SAYISI} teyit - henüz kapatılmadı, izleniyor.")
+                        elif kismi_ters:
+                            tg(f"👀 {sym} — üst trend KISMEN bozulmuş görünüyor (1/3), "
+                               f"{sayac_kismi}/{TREND_TERS_TEYIT_KISMI_SAYISI} teyit - henüz kapatılmadı, izleniyor.")
+                    except Exception as e:
+                        log.warning(f"[TREND_KONTROL_HATA] {sym}: {e}")
 
                 if guncel <= durum["sl"]:
-                    gercek_pozisyon_kapat(sym, "sl")
+                    sanal_pozisyon_kapat(sym, durum["sl"], "sl")
                     continue
 
                 entry = durum["entry"]
@@ -1013,25 +788,7 @@ def manage_loop():
                                 trade_state[sym]["en_iyi_kar"] = anlik_kar
                                 en_iyi = anlik_kar
                     if en_iyi is not None and anlik_kar <= en_iyi - gc_esik:
-                        gercek_pozisyon_kapat(sym, "iz_suren_tp")
-                        continue
-
-                # borsada pozisyon hâlâ var mı diye doğrula (SL borsada
-                # bizden önce tetiklenmiş olabilir)
-                try:
-                    pozlar = exchange.fetch_positions([sym])
-                    gercek_pos = next((p for p in pozlar if safe(p.get("contracts")) > 0), None)
-                    if not gercek_pos:
-                        with state_lock:
-                            durum2 = trade_state.pop(sym, None)
-                        durumu_diske_yaz()
-                        with cooldown_lock:
-                            son_kapanis_zamani[sym] = time.time()
-                        cooldown_diske_yaz()
-                        if durum2:
-                            _kapanis_kaydet_gercek_veriyle(sym, durum2, "sl_borsada_onceden")
-                except Exception as e:
-                    log.warning(f"[MANAGE_DOGRULA] {sym}: {e}")
+                        sanal_pozisyon_kapat(sym, guncel, "iz_suren_tp")
             time.sleep(5)
         except Exception as e:
             log.error(f"[MANAGE] {e}")
@@ -1039,20 +796,20 @@ def manage_loop():
 
 
 def tarama_loop():
-    tg(f"🚀 LIVE BOT v2.0 başladı — GERÇEK PARA (1D+4H+1H uyum, LONG-only)\n"
-       f"MAX_POS={MAX_POS} | Marjin: ${SABIT_MARJIN_USDT:.2f} sabit, {LEV}x\n"
-       f"SL taban %{MIN_SL_PCT*100:.0f}, hedef kayıp≈${TARGET_MAX_LOSS_USDT:.2f} | "
+    tg(f"🚀 PAPER BOT v2.1 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
+       f"⚠️ SANAL - hiçbir gerçek emir açılmıyor, sadece simülasyon.\n"
+       f"Kural: 1D+4H+1H üçü de yükselişte olmalı, sadece o zaman 15m sinyaline bakılır.\n"
+       f"MAX_POS={MAX_POS} | Sanal marjin: ${SANAL_MARJIN_USDT:.2f} | {LEV}x\n"
        f"TP: iz süren, {IZ_SURME_R_ORANI}R aktifleşme, {IZ_SURME_GERI_COKME_ORANI}R geri çekilme\n"
-       f"🔄 Trend dönüş ajanı: {'AKTİF' if TREND_AJANI_AKTIF else 'KAPALI (kullanıcı kararı - önceki testlerde net zarar verdi)'}\n\n"
-       f"Paper testinde çekirdek strateji: +$17.61/25 işlem (+$0.70/işlem ort.)\n\n"
+       f"🔄 Trend dönüş ajanı: {TREND_KONTROL_ARALIGI_SN//60}dk'da bir kontrol, "
+       f"{TREND_TERS_TEYIT_SAYISI} ardışık teyitte erken kapanır\n\n"
+       f"Backtest: 290 işlem, %58.6 kazanma, net +74.44$ (78 coin/~15 gün)\n\n"
        f"📱 /panel yaz — tam menüyü görürsün.")
-
-    baslangic_uzlastirma()
 
     while True:
         try:
             with state_lock:
-                bos_slot = MAX_POS - len(trade_state) - len(acilis_rezervasyonlari)
+                bos_slot = MAX_POS - len(trade_state)
             if bos_slot <= 0:
                 time.sleep(KONTROL_ARALIGI_SN)
                 continue
@@ -1080,9 +837,9 @@ def tarama_loop():
                             continue
                         if sinyal:
                             with state_lock:
-                                if sym in trade_state or len(trade_state) + len(acilis_rezervasyonlari) >= MAX_POS:
+                                if sym in trade_state or len(trade_state) >= MAX_POS:
                                     continue
-                            gercek_pozisyon_ac(sinyal)
+                            sanal_pozisyon_ac(sinyal)
                             bulunan += 1
 
             log.info(f"[NABIZ] tur tamam | havuz={len(adaylar)} | bulunan={bulunan} | acik={MAX_POS-bos_slot}/{MAX_POS}")
@@ -1093,10 +850,9 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("LIVE BOT v2.0 (1D+4H+1H, LONG-only) BAŞLIYOR...")
+    print("PAPER BOT v2.1 (1D+4H+1H UYUM, iki kademeli trend) BAŞLIYOR...")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
-    bloke_diskten_yukle()
     trade_log_yukle()
     threading.Thread(target=manage_loop, daemon=True).start()
     threading.Thread(target=telebot_polling_baslat, daemon=True).start()
