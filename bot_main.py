@@ -129,6 +129,22 @@ TREND_TERS_TEYIT_KISMI_SAYISI = int(os.getenv("TREND_TERS_TEYIT_KISMI_SAYISI", "
 # mantığın aynısı buraya da uygulandı - çoğunluk (2-3 zaman dilimi) bozulunca
 # hızlı teyit, sadece biri bozulunca daha uzun/temkinli teyit.
 
+# İZLEME LİSTESİ AJANI (20.08.2026 kararı): kullanıcının önerisi - genel
+# tarama listesi (aday_havuzu, en hareketli 80 coin) sessizce (büyük fiyat
+# hareketi olmadan) 1D+4H uyumuna erişen coinleri kaçırabilir, çünkü skor
+# 24h fiyat değişimine dayalı. Backtest analizi: geçmiş sinyallerin %38'i
+# sinyal anında %3'ten az 24h hareket göstermişti. Bu ajan, genel taramadan
+# BAĞIMSIZ olarak 2/3 uyumlu (1D+4H var, 1H yok) coinleri ayrı, sabit bir
+# listede (max İZLEME_LISTESI_BOYUTU) tutar; her turda bu liste TAM
+# kontrol edilir (1H + swing dip dahil) - 1H de uyunca son bir doğrulamayla
+# (ucyon_sinyal zaten kendi içinde tüm koşulları yeniden kontrol eder)
+# işlem açılır.
+IZLEME_LISTESI_BOYUTU = int(os.getenv("IZLEME_LISTESI_BOYUTU", "10"))
+IZLEME_TARAMA_ARALIGI_SN = int(os.getenv("IZLEME_TARAMA_ARALIGI_SN", "900"))
+IZLEME_MAX_YAS_SAAT = float(os.getenv("IZLEME_MAX_YAS_SAAT", "24"))
+# bir coin listede bu kadar saatten fazla kalıp hâlâ 1H uyum sağlamadıysa
+# ya da 1D/4H uyumunu kaybettiyse listeden düşürülür - bayat kayıt kalmasın
+
 TRADE_STATE_PATH = os.getenv("TRADE_STATE_PATH", "/data/paperv2_state.json")
 COOLDOWN_PATH = os.getenv("COOLDOWN_PATH", "/data/paperv2_cooldown.json")
 TRADE_LOG_PATH = os.getenv("TRADE_LOG_PATH", "/data/paperv2_log.json")
@@ -139,6 +155,10 @@ trade_log = []
 log_lock = threading.Lock()
 son_kapanis_zamani = {}
 cooldown_lock = threading.Lock()
+
+izleme_listesi = {}  # sym -> {"eklenme_zamani": ts}
+izleme_lock = threading.Lock()
+_son_izleme_taramasi = {"ts": 0}
 
 
 def atomik_yaz(path, veri):
@@ -262,6 +282,42 @@ def aday_havuzu():
     return [sym for sym, _ in adaylar[:ADAY_HAVUZU_BUYUKLUGU]]
 
 
+def genis_evren_listesi():
+    """KULLANICI KARARI (20.08.2026, izleme listesi ajanı): aday_havuzu()
+    sadece 'en hareketli' ADAY_HAVUZU_BUYUKLUGU (80) coini döner - skoru
+    24h fiyat değişimine dayalı. Ama bir coin BÜYÜK bir hareket yapmadan
+    sessizce 1D+4H+1H uyumuna erişiyorsa, düşük skor alıp bu listeden
+    dışarıda kalabilir. Backtest analizi: geçmiş sinyallerin %38'i sinyal
+    anında %3'ten AZ 24h hareket göstermişti - yani gerçek ortamda önemli
+    bir kısmı kaçırılma riski taşıyor. Bu fonksiyon, hacim filtresi DIŞINDA
+    hiçbir skor/sıralama uygulamadan TÜM uygun coinleri döner - izleme
+    listesi ajanı bunları tarayıp erken uyum yakalayabilsin diye."""
+    try:
+        tickers = exchange.fetch_tickers()
+    except Exception as e:
+        log.warning(f"[TICKERS_GENIS] {e}")
+        return []
+    try:
+        markets = exchange.load_markets()
+    except Exception:
+        markets = {}
+    tumu = []
+    for sym, t in tickers.items():
+        if not sym.endswith("/USDT:USDT"):
+            continue
+        base = sym.split("/")[0]
+        if base in SLUGGISH_BASE:
+            continue
+        m = markets.get(sym)
+        if m and m.get("info", {}).get("isRwa") == "YES":
+            continue
+        vol = t.get("quoteVolume") or 0
+        if vol < 300000:
+            continue
+        tumu.append(sym)
+    return tumu
+
+
 # ════════════════════════════════════════════
 # ÜÇLÜ ZAMAN DİLİMİ UYUM SİNYALİ (1D+4H+1H) + SADECE LONG
 # ════════════════════════════════════════════
@@ -273,6 +329,18 @@ def trend_yonu(df, periyot=MA_PERIYOT):
     if pd.isna(ma):
         return None
     return "yukselis" if fiyat > ma else "dusus"
+
+
+def iki_uzerinden_uc_kontrol(sym):
+    """İZLEME LİSTESİ AJANI (20.08.2026 kararı): sadece 1D+4H kontrol eder
+    (1H'ye BAKMAZ) - amaç, 'neredeyse hazır' (2/3 uyumlu) coinleri ucuz bir
+    kontrolle tespit edip izleme listesine almak. 1H onayı ayrıca, tam
+    sinyal fonksiyonunda (ucyon_sinyal) kontrol edilir."""
+    df_1d = get_df(sym, "1d", MA_PERIYOT + 10)
+    df_4h = get_df(sym, "4h", MA_PERIYOT + 5)
+    yon_1d = trend_yonu(df_1d)
+    yon_4h = trend_yonu(df_4h)
+    return yon_1d == "yukselis" and yon_4h == "yukselis"
 
 
 def ucyon_sinyal(sym):
@@ -460,8 +528,12 @@ def panel_ozet_metni():
 
 
 def panel_ayarlar_metni():
+    with izleme_lock:
+        izleme_boyut = len(izleme_listesi)
+        izleme_coinler = sorted(s.split("/")[0] for s in izleme_listesi.keys())
+    izleme_satiri = f"  Şu an listede: {', '.join(izleme_coinler)}" if izleme_coinler else "  Şu an liste boş"
     return ("⚙️ PAPER BOT v2 AYARLARI\n\n"
-            "Sürüm: v2.0 (1D+4H+1H üçlü uyum, LONG-only, trend dönüş ajanı dahil)\n\n"
+            "Sürüm: v2.2 (üçlü uyum + iki kademeli trend ajanı + izleme listesi ajanı)\n\n"
             "🧪 Bu bot SANAL modda çalışır — hiçbir gerçek emir açılmaz.\n\n"
             "Strateji: Üçlü zaman dilimi trend uyumu\n"
             "  1) 1D trend YUKARI olmalı (20 periyot MA)\n"
@@ -480,6 +552,14 @@ def panel_ayarlar_metni():
             f"uyumu tekrar kontrol edilir. Biri bile artık yükselişte değilse VE bu "
             f"{TREND_TERS_TEYIT_SAYISI} ardışık kontrolde teyit edilirse, SL beklenmeden "
             f"pozisyon erken kapatılır.\n\n"
+            f"👁️ İZLEME LİSTESİ AJANI (20.08.2026 kararı): genel tarama listesi "
+            f"(en hareketli {ADAY_HAVUZU_BUYUKLUGU} coin) sessizce (büyük fiyat "
+            f"hareketi olmadan) 1D+4H uyumuna erişen coinleri kaçırabilir - backtest "
+            f"analizi geçmiş sinyallerin %38'inin sinyal anında %3'ten az 24h hareket "
+            f"gösterdiğini buldu. Bu ajan 2/3 uyumlu coinleri ayrı, sabit bir listede "
+            f"(max {IZLEME_LISTESI_BOYUTU}) tutup her turda TAM kontrol eder - 1H de "
+            f"uyunca son doğrulamayla işlem açar.\n"
+            f"{izleme_satiri} ({izleme_boyut}/{IZLEME_LISTESI_BOYUTU})\n\n"
             "⚠️ Bu strateji hiç canlı test edilmedi - istatistiksel doğrulama yok.")
 
 
@@ -795,19 +875,140 @@ def manage_loop():
             time.sleep(5)
 
 
+def izleme_listesi_guncelle():
+    """İZLEME LİSTESİ AJANI: geniş evreni (tüm uygun coinler, hacim skoru
+    olmadan) tarar, sadece 1D+4H uyumlu (2/3) olanları listeye ekler.
+    Zaten pozisyonu açık ya da cooldown'da olan coinler atlanır. Liste
+    dolu değilse yeni adaylar eklenir, doluysa en eskisi çıkarılır."""
+    if time.time() - _son_izleme_taramasi["ts"] < IZLEME_TARAMA_ARALIGI_SN:
+        return
+    _son_izleme_taramasi["ts"] = time.time()
+
+    try:
+        genis_liste = genis_evren_listesi()
+    except Exception as e:
+        log.warning(f"[IZLEME_TARAMA] {e}")
+        return
+
+    with izleme_lock:
+        mevcut = set(izleme_listesi.keys())
+    with state_lock:
+        acik = set(trade_state.keys())
+
+    adaylar = [s for s in genis_liste if s not in mevcut and s not in acik and not cooldown_da_mi(s)]
+    if not adaylar:
+        return
+
+    eklenen = 0
+    with ThreadPoolExecutor(max_workers=6) as havuz:
+        gelecekler = {havuz.submit(iki_uzerinden_uc_kontrol, sym): sym for sym in adaylar}
+        for gelecek in as_completed(gelecekler):
+            sym = gelecekler[gelecek]
+            try:
+                uyumlu = gelecek.result()
+            except Exception as e:
+                log.warning(f"[IZLEME_KONTROL] {sym}: {e}")
+                continue
+            if not uyumlu:
+                continue
+            with izleme_lock:
+                if sym in izleme_listesi:
+                    continue
+                if len(izleme_listesi) >= IZLEME_LISTESI_BOYUTU:
+                    en_eski = min(izleme_listesi.items(), key=lambda kv: kv[1]["eklenme_zamani"])
+                    izleme_listesi.pop(en_eski[0], None)
+                izleme_listesi[sym] = {"eklenme_zamani": time.time()}
+                eklenen += 1
+    if eklenen:
+        log.info(f"[IZLEME_LISTESI] {eklenen} yeni coin eklendi, liste boyutu={len(izleme_listesi)}")
+
+
+def izleme_listesi_kontrol():
+    """İzleme listesindeki her coin için TAM sinyal kontrolü (1D+4H+1H+15m)
+    yapılır - bu, kullanıcının istediği 'son kontrolü yaparak işleme gir'
+    adımı: ucyon_sinyal() zaten üç zaman dilimini de sıfırdan yeniden
+    doğruluyor, hiçbir varsayım/eski veri kullanılmıyor. Ayrıca 1D veya 4H
+    uyumunu kaybetmiş ya da çok bayatlamış (IZLEME_MAX_YAS_SAAT) kayıtlar
+    listeden temizlenir."""
+    with izleme_lock:
+        izlenenler = dict(izleme_listesi)
+    if not izlenenler:
+        return 0
+
+    acilanlar = 0
+    for sym, kayit in izlenenler.items():
+        with state_lock:
+            if sym in trade_state or len(trade_state) >= MAX_POS:
+                continue
+        if cooldown_da_mi(sym):
+            with izleme_lock:
+                izleme_listesi.pop(sym, None)
+            continue
+
+        yas_saat = (time.time() - kayit["eklenme_zamani"]) / 3600
+        if yas_saat > IZLEME_MAX_YAS_SAAT:
+            with izleme_lock:
+                izleme_listesi.pop(sym, None)
+            log.info(f"[IZLEME_LISTESI] {sym} bayatladı ({yas_saat:.1f}sa), listeden çıkarıldı")
+            continue
+
+        try:
+            sinyal = ucyon_sinyal(sym)
+        except Exception as e:
+            log.warning(f"[IZLEME_SINYAL] {sym}: {e}")
+            continue
+
+        if sinyal:
+            with izleme_lock:
+                izleme_listesi.pop(sym, None)
+            with state_lock:
+                if sym in trade_state or len(trade_state) >= MAX_POS:
+                    continue
+            log.info(f"[IZLEME_LISTESI] {sym} tam uyuma ulaştı (1D+4H+1H+15m), pozisyon açılıyor")
+            sanal_pozisyon_ac(sinyal)
+            acilanlar += 1
+        else:
+            # hâlâ 1D+4H uyumlu mu diye kontrol et - değilse listeden düş
+            try:
+                if not iki_uzerinden_uc_kontrol(sym):
+                    with izleme_lock:
+                        izleme_listesi.pop(sym, None)
+            except Exception:
+                pass
+    return acilanlar
+
+
 def tarama_loop():
-    tg(f"🚀 PAPER BOT v2.1 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
+    tg(f"🚀 PAPER BOT v2.2 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
        f"⚠️ SANAL - hiçbir gerçek emir açılmıyor, sadece simülasyon.\n"
        f"Kural: 1D+4H+1H üçü de yükselişte olmalı, sadece o zaman 15m sinyaline bakılır.\n"
        f"MAX_POS={MAX_POS} | Sanal marjin: ${SANAL_MARJIN_USDT:.2f} | {LEV}x\n"
        f"TP: iz süren, {IZ_SURME_R_ORANI}R aktifleşme, {IZ_SURME_GERI_COKME_ORANI}R geri çekilme\n"
        f"🔄 Trend dönüş ajanı: {TREND_KONTROL_ARALIGI_SN//60}dk'da bir kontrol, "
-       f"{TREND_TERS_TEYIT_SAYISI} ardışık teyitte erken kapanır\n\n"
+       f"{TREND_TERS_TEYIT_SAYISI} ardışık teyitte erken kapanır\n"
+       f"👁️ İzleme listesi ajanı: max {IZLEME_LISTESI_BOYUTU} coin, {IZLEME_TARAMA_ARALIGI_SN//60}dk'da "
+       f"bir genişletiliyor - 2/3 uyumlu (sessizce/hareket olmadan) coinleri "
+       f"genel taramanın kaçırabileceği durumlar için ayrıca izler\n\n"
        f"Backtest: 290 işlem, %58.6 kazanma, net +74.44$ (78 coin/~15 gün)\n\n"
        f"📱 /panel yaz — tam menüyü görürsün.")
 
     while True:
         try:
+            with state_lock:
+                bos_slot = MAX_POS - len(trade_state)
+            if bos_slot <= 0:
+                time.sleep(KONTROL_ARALIGI_SN)
+                continue
+
+            # İZLEME LİSTESİ AJANI: önce listeyi genişlet (periyodik, ucuz
+            # 1D+4H kontrolü), sonra listedeki her coini TAM kontrol et.
+            try:
+                izleme_listesi_guncelle()
+                izleme_acilan = izleme_listesi_kontrol()
+            except Exception as e:
+                log.warning(f"[IZLEME_GENEL] {e}")
+                izleme_acilan = 0
+
             with state_lock:
                 bos_slot = MAX_POS - len(trade_state)
             if bos_slot <= 0:
@@ -842,7 +1043,11 @@ def tarama_loop():
                             sanal_pozisyon_ac(sinyal)
                             bulunan += 1
 
-            log.info(f"[NABIZ] tur tamam | havuz={len(adaylar)} | bulunan={bulunan} | acik={MAX_POS-bos_slot}/{MAX_POS}")
+            with izleme_lock:
+                izleme_boyut = len(izleme_listesi)
+            log.info(f"[NABIZ] tur tamam | havuz={len(adaylar)} | bulunan={bulunan} | "
+                     f"izleme_acilan={izleme_acilan} | izleme_liste={izleme_boyut}/{IZLEME_LISTESI_BOYUTU} | "
+                     f"acik={MAX_POS-bos_slot}/{MAX_POS}")
             time.sleep(KONTROL_ARALIGI_SN)
         except Exception as e:
             log.error(f"[TARAMA] {e}")
@@ -850,7 +1055,7 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("PAPER BOT v2.1 (1D+4H+1H UYUM, iki kademeli trend) BAŞLIYOR...")
+    print("PAPER BOT v2.2 (1D+4H+1H UYUM, izleme listesi ajanı) BAŞLIYOR...")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
     trade_log_yukle()
