@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
 """
 ════════════════════════════════════════════════════════
-PAPER BOT v2.1 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
-12 Ağustos 2026
+PAPER BOT v2.2 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
+12 Ağustos 2026 (v2.0) → 20-21 Ağustos 2026 (v2.1/v2.2 güncellemeleri)
+
+v2.1: iki kademeli trend dönüş ajanı (çoğunluk/kısmi bozulma, farklı
+teyit süreleri) - sonradan kullanıcı kararıyla TREND_TERS_TEYIT_SAYISI=50
+ile pratikte devre dışı bırakıldı (Railway ortam değişkeniyle).
+v2.2: İZLEME LİSTESİ AJANI eklendi - genel tarama (en hareketli 80 coin)
+sessizce (büyük hareket olmadan) 1D+4H uyumuna erişen coinleri
+kaçırabiliyordu (backtest: sinyallerin %38'i %3'ten az 24h hareketle
+oluşmuştu). Bu ajan 2/3 uyumlu coinleri ayrı, sabit bir listede (max 10)
+tutup her turda tam kontrol ediyor.
+KULLANICI KARARI (21.08.2026): Sanal kasa $500'e, marjin $100'e çıkarıldı
+(sıfırdan başlatıldı) - daha büyük ölçekte, daha net rakamlarla test.
 
 ⚠️ BU BOT GERÇEK EMİR AÇMAZ. Sadece canlı fiyatlarla simülasyon
 yapar, sonuçları kaydeder.
@@ -101,8 +112,11 @@ def yetkili_mi(msg_or_call):
 SLUGGISH_BASE = {"BTC", "ETH", "XRP", "ADA", "DOGE", "BNB", "TRX", "LINK", "LTC", "BCH"}
 
 # ── SANAL (paper) işlem parametreleri ──
-BASLANGIC_BAKIYE_USDT = float(os.getenv("BASLANGIC_BAKIYE_USDT", "50.0"))
-SANAL_MARJIN_USDT = float(os.getenv("SANAL_MARJIN_USDT", "5.0"))
+BASLANGIC_BAKIYE_USDT = float(os.getenv("BASLANGIC_BAKIYE_USDT", "500.0"))
+# KULLANICI KARARI (21.08.2026): $50'den $500'e çıkarıldı - sanal olduğu
+# için risk yok, tam sıfırlama ile birlikte.
+SANAL_MARJIN_USDT = float(os.getenv("SANAL_MARJIN_USDT", "100.0"))
+# KULLANICI KARARI (21.08.2026): $5'ten $100'e çıkarıldı.
 LEV = 10
 NOTIONAL = SANAL_MARJIN_USDT * LEV
 MAX_POS = int(os.getenv("MAX_POS", "3"))
@@ -727,11 +741,36 @@ if bot:
     def sifirlagecmis_komutu(msg):
         if not yetkili_mi(msg):
             return
-        global trade_log
+        # KULLANICI KARARI (21.08.2026): "hepsini sıfırla" isteğiyle - artık
+        # sadece işlem geçmişi değil, açık (sanal) pozisyonlar, cooldown'lar
+        # ve izleme listesi de temizleniyor. Sanal bir bot olduğu için
+        # gerçek borsada kapatılacak bir şey yok, sadece hafıza/disk
+        # kayıtları sıfırlanıyor.
+        global trade_log, son_kapanis_zamani
         with log_lock:
             trade_log = []
         atomik_yaz(TRADE_LOG_PATH, [])
-        bot.send_message(msg.chat.id, "🗑️ İşlem geçmişi sıfırlandı.")
+
+        with state_lock:
+            acik_sayisi = len(trade_state)
+            trade_state.clear()
+        durumu_diske_yaz()
+
+        with cooldown_lock:
+            son_kapanis_zamani = {}
+        cooldown_diske_yaz()
+
+        with izleme_lock:
+            izleme_listesi.clear()
+
+        bot.send_message(msg.chat.id,
+            f"🗑️ TAM SIFIRLAMA tamamlandı:\n"
+            f"  • İşlem geçmişi temizlendi\n"
+            f"  • {acik_sayisi} açık sanal pozisyon kapatıldı (kayıtsız)\n"
+            f"  • Cooldown listesi temizlendi\n"
+            f"  • İzleme listesi temizlendi\n\n"
+            f"💼 Yeni başlangıç bakiyesi: ${BASLANGIC_BAKIYE_USDT:,.2f}\n"
+            f"📊 Her işlem: ${SANAL_MARJIN_USDT:,.2f} marjin ({LEV}x = ${NOTIONAL:,.2f} notional)")
 
     @bot.message_handler(commands=["veri"])
     def veri_komutu(msg):
