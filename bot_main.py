@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ════════════════════════════════════════════════════════
-PAPER BOT v2.2 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
+PAPER BOT v2.3 — Üçlü Zaman Dilimi Uyumu (1D+4H+1H) + SADECE LONG
 12 Ağustos 2026 (v2.0) → 20-21 Ağustos 2026 (v2.1/v2.2 güncellemeleri)
 
 v2.1: iki kademeli trend dönüş ajanı (çoğunluk/kısmi bozulma, farklı
@@ -127,8 +127,18 @@ SL_BUFFER_PCT = 0.015
 MIN_SL_PCT = 0.05
 TARGET_MAX_LOSS_USDT = float(os.getenv("TARGET_MAX_LOSS_USDT", "0.90"))
 MAX_SL_PCT_TAVAN = TARGET_MAX_LOSS_USDT / NOTIONAL
-IZ_SURME_R_ORANI = 1.0
-IZ_SURME_GERI_COKME_ORANI = 0.5
+# KULLANICI KARARI (22.08.2026): live_bot_v2'deki "hızlı kâr al" güncellemesiyle
+# tutarlı olsun diye buraya da uygulandı - 1.0R/0.5R'den 0.4R/0.15R'ye.
+IZ_SURME_R_ORANI = float(os.getenv("IZ_SURME_R_ORANI", "0.4"))
+IZ_SURME_GERI_COKME_ORANI = float(os.getenv("IZ_SURME_GERI_COKME_ORANI", "0.15"))
+# KISMİ KÂR ALMA (22.08.2026 kararı, kullanıcı isteğiyle "sürekli kâr alsın"):
+# backtest'te test edildi (503 işlem, %76.9 kazanma, net +58.24$ - mevcut tam
+# iz sürmeden [%58.6 kazanma, +74.44$] biraz daha az toplam kâr ama çok daha
+# sık/hızlı, "sürekli kazanıyorum" hissi veren bir profil). Pozisyonun
+# KISMI_KAPAMA_ORANI kadarı KISMI_HEDEF_R'de HEMEN kapatılır, kalanı normal
+# iz sürmeyle (IZ_SURME_R_ORANI/IZ_SURME_GERI_COKME_ORANI) devam eder.
+KISMI_KAPAMA_ORANI = float(os.getenv("KISMI_KAPAMA_ORANI", "0.5"))
+KISMI_HEDEF_R = float(os.getenv("KISMI_HEDEF_R", "0.5"))
 KOMISYON_PCT = float(os.getenv("KOMISYON_PCT", "0.0006"))
 FUNDING_PCT_8SAAT = 0.0001
 COOLDOWN_SAAT = 1.0
@@ -410,12 +420,56 @@ def sanal_pozisyon_ac(sinyal):
             "acilis_zamani": time.time(), "en_iyi_kar": None, "iz_aktif": False,
             "1d": sinyal["1d"], "4h": sinyal["4h"], "1h": sinyal["1h"],
             "notional": NOTIONAL, "son_trend_kontrol": 0, "ters_trend_sayisi": 0,
+            # KISMİ KÂR ALMA (22.08.2026 kararı, kullanıcı isteğiyle): backtest'te
+            # test edildi (503 işlem, %76.9 kazanma, net +58.24$ - mevcut tam iz
+            # sürmeden [%58.6 kazanma, +74.44$] biraz daha az toplam kâr ama çok
+            # daha sık/hızlı kâr alma hissi). Pozisyonun yarısı 0.5R'de HEMEN
+            # kapatılır, kalan yarısı normal iz sürme (0.4R/0.15R) ile devam eder.
+            "kismi_alindi": False, "kismi_pnl_toplam": 0.0,
+            "orijinal_notional": NOTIONAL, "kalan_notional": NOTIONAL,
         }
     durumu_diske_yaz()
     tg(f"📝 SANAL POZİSYON (paper v2): {sym} LONG\n"
        f"Giriş≈{entry:.6f} | SL:{sl:.6f} (%{sl_mesafe*100:.1f})\n"
        f"1D:{sinyal['1d']} | 4H:{sinyal['4h']} | 1H:{sinyal['1h']} (üçlü uyumlu)\n"
+       f"📊 Kısmi kâr alma AKTİF: %{KISMI_KAPAMA_ORANI*100:.0f} pozisyon {KISMI_HEDEF_R:.1f}R'de "
+       f"hızlı kapanır, kalan iz sürmeyle devam eder\n"
        f"⚠️ Gerçek emir AÇILMADI - bu sadece simülasyon.")
+
+
+def sanal_pozisyon_kismi_kapat(sym, cikis_fiyat):
+    """KISMİ KÂR ALMA: pozisyonu TAMAMEN kapatmaz, sadece KISMI_KAPAMA_ORANI
+    kadarını hemen kapatıp ayrı bir işlem olarak kaydeder. Kalan pozisyon
+    (kalan_notional güncellenerek) normal iz sürme mantığıyla açık kalmaya
+    devam eder."""
+    with state_lock:
+        durum = trade_state.get(sym)
+        if not durum or durum.get("kismi_alindi"):
+            return
+        entry = durum["entry"]
+        orijinal_notional = durum.get("orijinal_notional", NOTIONAL)
+        kapanan_notional = orijinal_notional * KISMI_KAPAMA_ORANI
+
+        pnl_pct = (cikis_fiyat - entry) / entry
+        brut_pnl = pnl_pct * kapanan_notional
+        komisyon_maliyeti = KOMISYON_PCT * kapanan_notional * 2
+        net_pnl = brut_pnl - komisyon_maliyeti
+
+        durum["kismi_alindi"] = True
+        durum["kalan_notional"] = orijinal_notional * (1 - KISMI_KAPAMA_ORANI)
+        durum["kismi_pnl_toplam"] = net_pnl
+    durumu_diske_yaz()
+
+    trade_log_kaydet({"symbol": sym, "entry": entry, "exit": cikis_fiyat,
+                       "brut_pnl": brut_pnl, "komisyon": komisyon_maliyeti, "funding": 0.0,
+                       "pnl": net_pnl, "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+                       "not": "kismi_kar_alma", "1d": durum.get("1d"), "4h": durum.get("4h"), "1h": durum.get("1h")})
+
+    emoji = "🟢" if net_pnl >= 0 else "🔴"
+    tg(f"{emoji} KISMİ KÂR ALINDI: {sym} — pozisyonun %{KISMI_KAPAMA_ORANI*100:.0f}'i kapatıldı\n"
+       f"Giriş:{entry:.6f} → Şimdi:{cikis_fiyat:.6f} (%{pnl_pct*100:+.2f})\n"
+       f"💰 Kısmi net PnL: {net_pnl:+.2f}$\n"
+       f"🔒 Kalan %{(1-KISMI_KAPAMA_ORANI)*100:.0f} pozisyon iz sürmeyle devam ediyor.")
 
 
 def sanal_pozisyon_kapat(sym, cikis_fiyat, sebep):
@@ -429,7 +483,7 @@ def sanal_pozisyon_kapat(sym, cikis_fiyat, sebep):
     cooldown_diske_yaz()
 
     entry = durum["entry"]
-    poz_notional = durum.get("notional", NOTIONAL)
+    poz_notional = durum.get("kalan_notional", durum.get("notional", NOTIONAL))
     pnl_pct = (cikis_fiyat - entry) / entry
     brut_pnl = pnl_pct * poz_notional
     komisyon_maliyeti = KOMISYON_PCT * poz_notional * 2
@@ -586,7 +640,8 @@ def panel_gecmis_metni():
     for t in list(reversed(gecmis))[:15]:
         emoji = "🟢" if t["pnl"] >= 0 else "🔴"
         sebep = {"sl": "SL", "iz_suren_tp": "iz süren TP", "max_hold_timeout": "max süre",
-                 "trend_degisti": "trend çoğunlukla değişti", "trend_kismi_degisti": "trend kısmen değişti"}.get(t.get("not"), t.get("not", "?"))
+                 "trend_degisti": "trend çoğunlukla değişti", "trend_kismi_degisti": "trend kısmen değişti",
+                 "kismi_kar_alma": "kısmi kâr alma"}.get(t.get("not"), t.get("not", "?"))
         iz_bilgi = ""
         if t.get("iz_surme_aktifti"):
             en_iyi = t.get("en_iyi_kar")
@@ -891,7 +946,21 @@ def manage_loop():
 
                 entry = durum["entry"]
                 r_risk = durum["r_risk"]
-                poz_notional = durum.get("notional", NOTIONAL)
+
+                # KISMİ KÂR ALMA: henüz alınmadıysa ve 0.5R hedefine
+                # ulaşıldıysa, pozisyonun yarısını HEMEN kapat (bkz.
+                # sanal_pozisyon_kismi_kapat). Kalan yarı aşağıdaki normal
+                # iz sürme mantığıyla devam eder.
+                if not durum.get("kismi_alindi", False):
+                    kismi_hedef_fiyat = entry + r_risk * KISMI_HEDEF_R
+                    if guncel >= kismi_hedef_fiyat:
+                        sanal_pozisyon_kismi_kapat(sym, guncel)
+                        with state_lock:
+                            durum = trade_state.get(sym)
+                        if not durum:
+                            continue
+
+                poz_notional = durum.get("kalan_notional", durum.get("notional", NOTIONAL))
                 anlik_kar = (guncel - entry) / entry * poz_notional
                 risk_usdt = (r_risk / entry) * poz_notional
                 iz_esik = risk_usdt * IZ_SURME_R_ORANI
@@ -1018,7 +1087,7 @@ def izleme_listesi_kontrol():
 
 
 def tarama_loop():
-    tg(f"🚀 PAPER BOT v2.2 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
+    tg(f"🚀 PAPER BOT v2.3 başladı - 1D+4H+1H UYUM + SADECE LONG\n"
        f"⚠️ SANAL - hiçbir gerçek emir açılmıyor, sadece simülasyon.\n"
        f"Kural: 1D+4H+1H üçü de yükselişte olmalı, sadece o zaman 15m sinyaline bakılır.\n"
        f"MAX_POS={MAX_POS} | Sanal marjin: ${SANAL_MARJIN_USDT:.2f} | {LEV}x\n"
@@ -1094,7 +1163,7 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("PAPER BOT v2.2 (1D+4H+1H UYUM, izleme listesi ajanı) BAŞLIYOR...")
+    print("PAPER BOT v2.3 (1D+4H+1H UYUM, izleme listesi ajanı) BAŞLIYOR...")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
     trade_log_yukle()
