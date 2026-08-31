@@ -615,7 +615,7 @@ def panel_ayarlar_metni():
             f"Kaldıraç: {LEV}x (sanal) | Sanal marjin: ${SANAL_MARJIN_USDT:.2f}\n"
             f"MAX_POS: {MAX_POS}\n"
             f"SL: swing bazlı, taban %{MIN_SL_PCT*100:.0f}, hedef kayıp≈${TARGET_MAX_LOSS_USDT:.2f}\n"
-            f"TP: İZ SÜREN — {IZ_SURME_R_ORANI:.1f}R aktifleşme, {IZ_SURME_GERI_COKME_ORANI:.1f}R geri çekilme\n\n"
+            f"TP: İZ SÜREN — {IZ_SURME_R_ORANI:.2f}R aktifleşme, {IZ_SURME_GERI_COKME_ORANI:.2f}R geri çekilme\n\n"
             f"🔄 TREND DÖNÜŞ AJANI: {TREND_KONTROL_ARALIGI_SN//60}dk'da bir 1D+4H+1H "
             f"uyumu tekrar kontrol edilir. Biri bile artık yükselişte değilse VE bu "
             f"{TREND_TERS_TEYIT_SAYISI} ardışık kontrolde teyit edilirse, SL beklenmeden "
