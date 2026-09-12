@@ -109,18 +109,36 @@ LOOKBACK_15M = 20
 MA_PERIYOT = 20
 SL_BUFFER_PCT = 0.015
 MIN_SL_PCT = 0.05
-# FIRSATÇI ÇIKIŞ: sabit hedef, iz sürme YOK
-HIZLI_HEDEF_PCT = float(os.getenv("HIZLI_HEDEF_PCT", "0.05"))
+
+# KULLANICI KARARI (11.09.2026, "kendin bir strateji tasarla" isteği):
+# Claude'un sıfırdan tasarımı - 1D+4H+1H uyum + 4H VE 1D'de trend GÜCÜ
+# kontrolü (sadece yön değil, MA'dan ne kadar uzak olduğu da önemli) +
+# dip mesafesi filtresi + kısmi kâr alma. Backtest (27 coin, ~6 hafta,
+# 3 farklı piyasa dönemi dahil - sadece ralli değil): 244 işlem, %67.6
+# kazanma, net +$24.33 ($10 notional ölçeğinde). 6 haftanın SADECE 1'i
+# negatifti (neredeyse sıfır, -$0.02). En büyük düşüş: -$2.47.
+# DÜRÜSTLÜK: kârın %59'u tek bir güçlü ralli haftasından geldi - diğer
+# 5 hafta ortalama ~$2/hafta gibi mütevazı ama TUTARLI pozitif bir
+# sonuç verdi. Bu, garantili bir kazanç değil, sadece şimdiye kadarki
+# en dengeli backtest sonucu.
+MIN_TREND_GUCU_4H = float(os.getenv("MIN_TREND_GUCU_4H", "2.0"))
+MIN_TREND_GUCU_1D = float(os.getenv("MIN_TREND_GUCU_1D", "1.0"))
+GIRIS_MAX_MESAFE = float(os.getenv("GIRIS_MAX_MESAFE", "0.02"))
+
+KISMI_KAPAMA_ORANI = float(os.getenv("KISMI_KAPAMA_ORANI", "0.5"))
+KISMI_HEDEF_PCT = float(os.getenv("KISMI_HEDEF_PCT", "0.02"))
+KALAN_HEDEF_PCT = float(os.getenv("KALAN_HEDEF_PCT", "0.05"))
+
 KOMISYON_PCT = float(os.getenv("KOMISYON_PCT", "0.0006"))
 FUNDING_PCT_8SAAT = 0.0001
 COOLDOWN_SAAT = 1.0
-MAX_HOLD_SAAT = float(os.getenv("MAX_HOLD_SAAT", "4"))
+MAX_HOLD_SAAT = float(os.getenv("MAX_HOLD_SAAT", "8"))
 KONTROL_ARALIGI_SN = 60
 ADAY_HAVUZU_BUYUKLUGU = 80
 
-TRADE_STATE_PATH = os.getenv("TRADE_STATE_PATH", "/data/firsatci_state.json")
-COOLDOWN_PATH = os.getenv("COOLDOWN_PATH", "/data/firsatci_cooldown.json")
-TRADE_LOG_PATH = os.getenv("TRADE_LOG_PATH", "/data/firsatci_log.json")
+TRADE_STATE_PATH = os.getenv("TRADE_STATE_PATH", "/data/kendi_state.json")
+COOLDOWN_PATH = os.getenv("COOLDOWN_PATH", "/data/kendi_cooldown.json")
+TRADE_LOG_PATH = os.getenv("TRADE_LOG_PATH", "/data/kendi_log.json")
 
 trade_state = {}
 state_lock = threading.Lock()
@@ -264,7 +282,23 @@ def trend_yonu(df, periyot=MA_PERIYOT):
     return "yukselis" if fiyat > ma else "dusus"
 
 
+def trend_gucu_pct(df, periyot=MA_PERIYOT):
+    """Fiyatın MA'dan yüzde kaç uzakta olduğunu hesaplar - 'ne kadar
+    güçlü yükselişte' sorusuna cevap verir (sadece yön değil)."""
+    if df is None or len(df) < periyot + 1:
+        return None
+    ma = df["close"].rolling(periyot).mean().iloc[-1]
+    fiyat = df["close"].iloc[-1]
+    if pd.isna(ma) or ma == 0:
+        return None
+    return (fiyat - ma) / ma * 100
+
+
 def ucyon_sinyal(sym):
+    """KENDİ STRATEJİM (11.09.2026, Claude'un sıfırdan tasarımı):
+    1D+4H+1H uyum + 4H VE 1D'de trend GÜCÜ kontrolü (sadece yön değil)
+    + dip mesafesi filtresi. Backtest: 244 işlem, %67.6 kazanma,
+    +$24.33 (27 coin, ~6 hafta, 3 farklı piyasa dönemi)."""
     df_1d = get_df(sym, "1d", MA_PERIYOT + 10)
     df_4h = get_df(sym, "4h", MA_PERIYOT + 5)
     df_1h = get_df(sym, "1h", MA_PERIYOT + 5)
@@ -275,6 +309,14 @@ def ucyon_sinyal(sym):
     yon_1h = trend_yonu(df_1h)
     if yon_1d != "yukselis" or yon_4h != "yukselis" or yon_1h != "yukselis":
         return None
+
+    guc_4h = trend_gucu_pct(df_4h)
+    guc_1d = trend_gucu_pct(df_1d)
+    if guc_4h is None or guc_4h < MIN_TREND_GUCU_4H:
+        return None
+    if guc_1d is None or guc_1d < MIN_TREND_GUCU_1D:
+        return None
+
     if df_15m is None or len(df_15m) < LOOKBACK_15M + 2:
         return None
 
@@ -288,6 +330,9 @@ def ucyon_sinyal(sym):
     yukari_kapandi = son_mum["close"] > son_mum["open"]
 
     if dip_yakin and yukari_kapandi and son_mum["close"] > swing_low:
+        mesafe = (son_mum["close"] - swing_low) / swing_low
+        if mesafe > GIRIS_MAX_MESAFE:
+            return None
         return {"symbol": sym, "entry": float(son_mum["close"]), "swing_nokta": float(swing_low),
                 "1d": yon_1d, "4h": yon_4h, "1h": yon_1h}
     return None
@@ -307,19 +352,22 @@ def sanal_pozisyon_ac(sinyal):
         sl = swing_nokta * (1 - SL_BUFFER_PCT)
         sl_mesafe = max(MIN_SL_PCT, (entry - sl) / entry)
         sl = entry * (1 - sl_mesafe)
-        tp = entry * (1 + HIZLI_HEDEF_PCT)
+        kismi_hedef = entry * (1 + KISMI_HEDEF_PCT)
+        kalan_hedef = entry * (1 + KALAN_HEDEF_PCT)
 
         trade_state[sym] = {
-            "entry": entry, "sl": sl, "tp": tp, "yon": "long",
-            "acilis_zamani": time.time(),
+            "entry": entry, "sl": sl, "kismi_hedef": kismi_hedef, "kalan_hedef": kalan_hedef,
+            "yon": "long", "acilis_zamani": time.time(),
             "1d": sinyal["1d"], "4h": sinyal["4h"], "1h": sinyal["1h"],
-            "notional": NOTIONAL,
+            "orijinal_notional": NOTIONAL, "kalan_notional": NOTIONAL,
+            "kismi_alindi": False, "kismi_pnl_toplam": 0.0,
         }
     durumu_diske_yaz()
-    tg(f"📝 SANAL POZİSYON (fırsatçı): {sym} LONG\n"
-       f"Giriş≈{entry:.6f} | SL:{sl:.6f} (%{sl_mesafe*100:.1f}) | TP:{tp:.6f} (%{HIZLI_HEDEF_PCT*100:.1f} sabit)\n"
-       f"1D:{sinyal['1d']} | 4H:{sinyal['4h']} | 1H:{sinyal['1h']} (üçlü uyumlu)\n"
-       f"⚡ FIRSATÇI ÇIKIŞ: hedefe değer değmez HEMEN kapanır, bekleme yok\n"
+    tg(f"📝 SANAL POZİSYON (kendi stratejim): {sym} LONG\n"
+       f"Giriş≈{entry:.6f} | SL:{sl:.6f} (%{sl_mesafe*100:.1f})\n"
+       f"Kısmi hedef (%{KISMI_KAPAMA_ORANI*100:.0f} poz.): {kismi_hedef:.6f} (%{KISMI_HEDEF_PCT*100:.1f})\n"
+       f"Kalan hedef: {kalan_hedef:.6f} (%{KALAN_HEDEF_PCT*100:.1f})\n"
+       f"1D:{sinyal['1d']} | 4H:{sinyal['4h']} | 1H:{sinyal['1h']} (üçlü uyumlu + çift zaman dilimi güç kontrolü)\n"
        f"⚠️ Gerçek emir AÇILMADI - bu sadece simülasyon.")
 
 
@@ -334,28 +382,69 @@ def sanal_pozisyon_kapat(sym, cikis_fiyat, sebep):
     cooldown_diske_yaz()
 
     entry = durum["entry"]
-    poz_notional = durum.get("notional", NOTIONAL)
+    poz_notional = durum.get("kalan_notional", durum.get("orijinal_notional", NOTIONAL))
     pnl_pct = (cikis_fiyat - entry) / entry
     brut_pnl = pnl_pct * poz_notional
     komisyon_maliyeti = KOMISYON_PCT * poz_notional * 2
     sure_saat = (time.time() - durum["acilis_zamani"]) / 3600
     funding_periyot = int(sure_saat // 8)
     funding_maliyeti = FUNDING_PCT_8SAAT * poz_notional * funding_periyot
+    # DİKKAT: net_pnl (log'a yazılan) SADECE bu kapanışın kendi payı - kısmi
+    # kâr zaten AYRI bir trade_log kaydında var (sanal_pozisyon_kismi_kapat
+    # içinde). Buraya tekrar eklemek ÇİFT SAYMA olurdu - bunu test ederken
+    # bulup düzelttim. Toplam (kısmi+bu kapanış) sadece Telegram mesajında
+    # bilgi amaçlı gösteriliyor, log'a öyle yazılmıyor.
     net_pnl = brut_pnl - komisyon_maliyeti - funding_maliyeti
+    kismi_pnl_toplam = durum.get("kismi_pnl_toplam", 0.0)
+    toplam_gosterim = net_pnl + kismi_pnl_toplam
 
     trade_log_kaydet({"symbol": sym, "entry": entry, "exit": cikis_fiyat,
                        "brut_pnl": brut_pnl, "komisyon": komisyon_maliyeti, "funding": funding_maliyeti,
                        "pnl": net_pnl, "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
                        "not": sebep, "1d": durum.get("1d"), "4h": durum.get("4h"), "1h": durum.get("1h")})
 
-    emoji = "🟢" if net_pnl >= 0 else "🔴"
-    sebep_etiket = {"sl": "SL vuruldu", "hizli_tp": "Hızlı hedef (sabit TP)",
-                     "max_hold_timeout": "Max süre doldu (4sa)"}.get(sebep, sebep)
+    emoji = "🟢" if toplam_gosterim >= 0 else "🔴"
+    sebep_etiket = {"sl": "SL vuruldu", "tam_hedef": "Kalan pozisyon tam hedefe ulaştı",
+                     "max_hold_timeout": f"Max süre doldu ({MAX_HOLD_SAAT:.0f}sa)"}.get(sebep, sebep)
     funding_satiri = f" | Funding: -{funding_maliyeti:.2f}$ ({funding_periyot}x)" if funding_periyot > 0 else ""
-    tg(f"{emoji} SANAL kapandı (fırsatçı): {sym} [{sebep_etiket}]\n"
-       f"Giriş:{entry:.6f} → Çıkış:{cikis_fiyat:.6f} (%{pnl_pct*100:+.2f} hareket)\n"
-       f"Brüt PnL: {brut_pnl:+.2f}$ | Komisyon: -{komisyon_maliyeti:.2f}${funding_satiri}\n"
-       f"💰 Net PnL: {net_pnl:+.2f}$ (simülasyon, gerçek para değil)")
+    kismi_satiri = f" | Kısmi kâr: +{kismi_pnl_toplam:.2f}$" if kismi_pnl_toplam > 0 else ""
+    tg(f"{emoji} SANAL kapandı (kendi stratejim): {sym} [{sebep_etiket}]\n"
+       f"Giriş:{entry:.6f} → Çıkış:{cikis_fiyat:.6f} (%{pnl_pct*100:+.2f} hareket, kalan pozisyon üzerinden)\n"
+       f"Brüt PnL: {brut_pnl:+.2f}$ | Komisyon: -{komisyon_maliyeti:.2f}${funding_satiri}{kismi_satiri}\n"
+       f"💰 Toplam net PnL: {toplam_gosterim:+.2f}$ (simülasyon, gerçek para değil)")
+
+
+def sanal_pozisyon_kismi_kapat(sym, cikis_fiyat):
+    """Pozisyonun KISMI_KAPAMA_ORANI kadarını hemen kapatır, kalanını
+    açık bırakır (kalan_notional güncellenir)."""
+    with state_lock:
+        durum = trade_state.get(sym)
+        if not durum or durum.get("kismi_alindi"):
+            return
+        entry = durum["entry"]
+        orijinal_notional = durum.get("orijinal_notional", NOTIONAL)
+        kapanan_notional = orijinal_notional * KISMI_KAPAMA_ORANI
+
+        pnl_pct = (cikis_fiyat - entry) / entry
+        brut_pnl = pnl_pct * kapanan_notional
+        komisyon_maliyeti = KOMISYON_PCT * kapanan_notional * 2
+        net_pnl = brut_pnl - komisyon_maliyeti
+
+        durum["kismi_alindi"] = True
+        durum["kalan_notional"] = orijinal_notional * (1 - KISMI_KAPAMA_ORANI)
+        durum["kismi_pnl_toplam"] = net_pnl
+    durumu_diske_yaz()
+
+    trade_log_kaydet({"symbol": sym, "entry": entry, "exit": cikis_fiyat,
+                       "brut_pnl": brut_pnl, "komisyon": komisyon_maliyeti, "funding": 0.0,
+                       "pnl": net_pnl, "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+                       "not": "kismi_kar_alma", "1d": durum.get("1d"), "4h": durum.get("4h"), "1h": durum.get("1h")})
+
+    emoji = "🟢" if net_pnl >= 0 else "🔴"
+    tg(f"{emoji} KISMİ KÂR ALINDI (kendi stratejim): {sym} — pozisyonun %{KISMI_KAPAMA_ORANI*100:.0f}'i kapatıldı\n"
+       f"Giriş:{entry:.6f} → Şimdi:{cikis_fiyat:.6f} (%{pnl_pct*100:+.2f})\n"
+       f"💰 Kısmi net PnL: {net_pnl:+.2f}$\n"
+       f"🔒 Kalan %{(1-KISMI_KAPAMA_ORANI)*100:.0f} pozisyon, tam hedefi (%{KALAN_HEDEF_PCT*100:.1f}) bekliyor.")
 
 
 # ════════════════════════════════════════════
@@ -371,9 +460,9 @@ def acik_pozisyonlar_gercek_pnl():
             t = exchange.fetch_ticker(sym)
             guncel = safe(t["last"])
             entry = d["entry"]
-            poz_notional = d.get("notional", NOTIONAL)
+            poz_notional = d.get("kalan_notional", d.get("orijinal_notional", NOTIONAL))
             pnl_pct = (guncel - entry) / entry
-            anlik = pnl_pct * poz_notional
+            anlik = pnl_pct * poz_notional + d.get("kismi_pnl_toplam", 0.0)
             toplam += anlik
             detaylar.append((sym, anlik))
         except Exception:
@@ -395,8 +484,8 @@ def panel_ozet_metni():
 
     kasa_emoji = "📈" if canli_toplam_deger >= BASLANGIC_BAKIYE_USDT else "📉"
     satirlar = [
-        "⚡ PAPER BOT FIRSATÇI — CANLI ÖZET",
-        "(sanal kasa, sabit %5 hızlı hedef, bekleme yok)",
+        "🧠 PAPER BOT KENDİ STRATEJİM — CANLI ÖZET",
+        "(sanal kasa, çift zaman dilimi trend gücü + kısmi kâr alma)",
         "━━━━━━━━━━━━━━━━━━━━",
         f"{kasa_emoji} Toplam Değer:  {canli_toplam_deger:,.2f}$   ({toplam_getiri_pct:+.1f}%)",
         f"💼 Kasa (gerçekleşen): {guncel_bakiye:,.2f}$  (başlangıç: {BASLANGIC_BAKIYE_USDT:,.2f}$)",
@@ -433,27 +522,34 @@ def panel_ozet_metni():
 
 
 def panel_ayarlar_metni():
-    return ("⚙️ PAPER BOT FIRSATÇI AYARLARI\n\n"
-            "Sürüm: v1.0 (deneysel - sabit hızlı hedef stratejisi)\n\n"
+    return ("⚙️ PAPER BOT KENDİ STRATEJİM AYARLARI\n\n"
+            "Sürüm: v1.0 (11.09.2026, Claude'un sıfırdan tasarımı)\n\n"
             "🧪 Bu bot SANAL modda çalışır — hiçbir gerçek emir açılmaz.\n\n"
-            "Giriş (paper_bot_v2 ile AYNI, kanıtlanmış filtre):\n"
+            "Giriş:\n"
             "  1) 1D trend YUKARI olmalı\n"
             "  2) 4H trend YUKARI olmalı\n"
             "  3) 1H trend YUKARI olmalı\n"
-            "  4) 15m'de swing dip + dönüş onayı → LONG (SADECE LONG)\n\n"
-            "⚡ ÇIKIŞ (BURASI FARKLI - iz sürme YOK):\n"
-            f"  TP: SABİT %{HIZLI_HEDEF_PCT*100:.1f} hedef - değer değmez HEMEN kapanır\n"
+            f"  4) 4H trend en az %{MIN_TREND_GUCU_4H:.1f} güçte olmalı (MA20'den uzaklık)\n"
+            f"  5) 1D trend en az %{MIN_TREND_GUCU_1D:.1f} güçte olmalı (YENİ FİKİR - sadece "
+            f"yön değil, büyük resmin de kararlı olması)\n"
+            "  6) 15m'de swing dip + dönüş onayı → LONG (SADECE LONG)\n"
+            f"  7) Giriş fiyatı dipten en fazla %{GIRIS_MAX_MESAFE*100:.0f} uzak olmalı\n\n"
+            "⚡ ÇIKIŞ (kısmi kâr alma + kalan hedef):\n"
+            f"  %{KISMI_KAPAMA_ORANI*100:.0f} pozisyon %{KISMI_HEDEF_PCT*100:.1f}'de HEMEN kapanır (garanti, hızlı kâr)\n"
+            f"  Kalan %{(1-KISMI_KAPAMA_ORANI)*100:.0f} pozisyon %{KALAN_HEDEF_PCT*100:.1f} tam hedefi bekler\n"
             f"  SL: swing bazlı, taban %{MIN_SL_PCT*100:.0f}\n"
-            f"  Max tutma: {MAX_HOLD_SAAT:.0f} SAAT (bekleme yok, hızlı karar)\n\n"
+            f"  Max tutma: {MAX_HOLD_SAAT:.0f} SAAT\n\n"
             f"Kaldıraç: {LEV}x (sanal) | Sanal marjin: ${SANAL_MARJIN_USDT:.2f}\n"
             f"MAX_POS: {MAX_POS}\n\n"
-            "📊 BACKTEST (78 coin/~14 gün, $1 marjin ölçeğinde, komisyon dahil):\n"
-            "  573 işlem, %64.4 kazanma, net +$58.10 (ort +$0.10/işlem)\n"
-            "  Brüt $64.97 idi, komisyon $6.88 (%10.6) yedi.\n\n"
-            "⚠️ DÜRÜSTLÜK NOTU: Bu strateji SADECE backtest edildi, hiç "
-            "canlı/paper test edilmedi. Bu botun amacı tam da bunu görmek - "
-            "gerçek piyasada backtest'teki gibi çalışıyor mu, yoksa MAX_POS "
-            "sınırı/kayma/ani dönüşler farklı sonuç mu veriyor?")
+            "📊 BACKTEST (27 coin, ~6 hafta, 3 farklı piyasa dönemi dahil):\n"
+            "  244 işlem, %67.6 kazanma, net +$24.33 ($10 notional ölçeğinde)\n"
+            "  6 haftanın sadece 1'i hafif negatifti (-$0.02)\n"
+            "  En büyük düşüş (zirveden dibe): -$2.47\n\n"
+            "⚠️ DÜRÜSTLÜK NOTU: Kârın %59'u tek bir güçlü ralli haftasından "
+            "geldi - diğer 5 hafta ortalama ~$2/hafta gibi mütevazı ama "
+            "TUTARLI pozitif bir sonuç verdi. Garantili değil, sadece "
+            "şimdiye kadarki en dengeli backtest sonucu. Bu botun amacı "
+            "gerçek piyasada bu dengenin korunup korunmadığını görmek.")
 
 
 def panel_gecmis_metni():
@@ -464,7 +560,8 @@ def panel_gecmis_metni():
     satirlar = ["📜 SON 15 SANAL İŞLEM\n"]
     for t in list(reversed(gecmis))[:15]:
         emoji = "🟢" if t["pnl"] >= 0 else "🔴"
-        sebep = {"sl": "SL", "hizli_tp": "hızlı hedef", "max_hold_timeout": "max süre"}.get(t.get("not"), t.get("not", "?"))
+        sebep = {"sl": "SL", "tam_hedef": "tam hedef", "max_hold_timeout": "max süre",
+                 "kismi_kar_alma": "kısmi kâr alma"}.get(t.get("not"), t.get("not", "?"))
         satirlar.append(f"{emoji} {t['symbol'].split('/')[0]} LONG {t['pnl']:+.2f}$ "
                          f"[{sebep}]\n   {t['zaman']} | 1D:{t.get('1d','?')}/4H:{t.get('4h','?')}/1H:{t.get('1h','?')}")
     return "\n".join(satirlar)
@@ -512,14 +609,16 @@ def panel_risk_metni():
             t = exchange.fetch_ticker(sym)
             guncel = safe(t["last"])
             entry = d["entry"]
+            poz_notional = d.get("kalan_notional", d.get("orijinal_notional", NOTIONAL))
             pnl_pct = (guncel - entry) / entry * 100
-            anlik_kar = pnl_pct / 100 * d.get("notional", NOTIONAL)
+            anlik_kar = pnl_pct / 100 * poz_notional + d.get("kismi_pnl_toplam", 0.0)
             sure_dk = (time.time() - d["acilis_zamani"]) / 60
             kalan_dk = MAX_HOLD_SAAT * 60 - sure_dk
+            kismi_durum = "✅ alındı" if d.get("kismi_alindi") else "🔓 bekliyor"
             satirlar.append(f"{sym} LONG (1D:{d.get('1d')}/4H:{d.get('4h')}/1H:{d.get('1h')})\n"
                              f"  Giriş:{entry:.6f} Şimdi:{guncel:.6f} (%{pnl_pct:+.2f})\n"
-                             f"  Anlık PnL: {anlik_kar:+.2f}$ | SL:{d['sl']:.6f} | TP:{d['tp']:.6f}\n"
-                             f"  Açık süre: {sure_dk:.0f} dk | Max tutmaya kalan: {max(0,kalan_dk):.0f} dk")
+                             f"  Anlık PnL: {anlik_kar:+.2f}$ | SL:{d['sl']:.6f} | Kalan hedef:{d['kalan_hedef']:.6f}\n"
+                             f"  Kısmi kâr: {kismi_durum} | Açık süre: {sure_dk:.0f} dk | Max tutmaya kalan: {max(0,kalan_dk):.0f} dk")
         except Exception:
             satirlar.append(f"{sym} (fiyat alınamadı)")
     return "\n".join(satirlar)
@@ -666,8 +765,16 @@ def manage_loop():
                     sanal_pozisyon_kapat(sym, durum["sl"], "sl")
                     continue
 
-                if guncel >= durum["tp"]:
-                    sanal_pozisyon_kapat(sym, durum["tp"], "hizli_tp")
+                if not durum.get("kismi_alindi", False):
+                    if guncel >= durum["kismi_hedef"]:
+                        sanal_pozisyon_kismi_kapat(sym, durum["kismi_hedef"])
+                        with state_lock:
+                            durum = trade_state.get(sym)
+                        if not durum:
+                            continue
+
+                if guncel >= durum["kalan_hedef"]:
+                    sanal_pozisyon_kapat(sym, durum["kalan_hedef"], "tam_hedef")
                     continue
 
                 if (time.time() - durum["acilis_zamani"]) > MAX_HOLD_SAAT * 3600:
@@ -680,15 +787,19 @@ def manage_loop():
 
 
 def tarama_loop():
-    tg(f"⚡ PAPER BOT FIRSATÇI v1.0 başladı - SABİT HIZLI HEDEF\n"
+    tg(f"🧠 PAPER BOT KENDİ STRATEJİM v1.0 başladı\n"
        f"⚠️ SANAL - hiçbir gerçek emir açılmıyor, sadece simülasyon.\n"
-       f"Kural: 1D+4H+1H üçü de yükselişte olmalı, 15m swing dip + dönüş onayı.\n"
+       f"Kural: 1D+4H+1H üçü de yükselişte olmalı VE 4H+1D'de trend GÜCÜ "
+       f"yeterli olmalı (sadece yön değil) + 15m swing dip + dönüş onayı + "
+       f"dip mesafesi filtresi.\n"
        f"MAX_POS={MAX_POS} | Sanal marjin: ${SANAL_MARJIN_USDT:.2f} | {LEV}x\n"
-       f"⚡ ÇIKIŞ: SABİT %{HIZLI_HEDEF_PCT*100:.1f} hedefte HEMEN kapan (iz sürme YOK, bekleme YOK)\n"
-       f"Max tutma: {MAX_HOLD_SAAT:.0f} saat (hızlı karar, uzun bekleme yok)\n\n"
-       f"Backtest: 573 işlem, %64.4 kazanma, net +$58.10 ($1 marjin ölçeğinde, "
-       f"78 coin/~14 gün, komisyon dahil)\n"
-       f"⚠️ Bu strateji hiç canlı test edilmedi - ilk kez burada deneniyor.\n\n"
+       f"⚡ ÇIKIŞ: %{KISMI_KAPAMA_ORANI*100:.0f} pozisyon %{KISMI_HEDEF_PCT*100:.1f}'de hızlı kapanır, "
+       f"kalan %{KALAN_HEDEF_PCT*100:.1f} tam hedefi bekler\n"
+       f"Max tutma: {MAX_HOLD_SAAT:.0f} saat\n\n"
+       f"Backtest (27 coin, ~6 hafta, 3 farklı piyasa dönemi): 244 işlem, "
+       f"%67.6 kazanma, net +$24.33 ($10 notional ölçeğinde)\n"
+       f"⚠️ 6 haftanın sadece 1'i hafif negatifti (-$0.02) - ama kârın "
+       f"%59'u tek bir güçlü ralli haftasından geldi, garantili değil.\n\n"
        f"📱 /panel yaz — tam menüyü görürsün.")
 
     while True:
