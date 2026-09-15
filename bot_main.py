@@ -2,17 +2,25 @@
 """
 ════════════════════════════════════════════════════════
 PAPER BOT — LİKİDİTE AVI SONRASI TERSİNE DÖNÜŞ (SANAL PARA)
-14 Eylül 2026 (v1.0) → 14 Eylül 2026 (v1.1) → 15 Eylül 2026 (v1.2)
+14 Eylül 2026 (v1.0) → 14 Eylül 2026 (v1.1) → 15 Eylül 2026 (v1.2 → v1.3)
+
+v1.3 (15.09.2026, kullanıcı kararıyla — v1.2'nin gerçek sonucuyla
+bulunan hata): v1.2'deki erken güvenlik çıkışı sadece TAM 40. dakikada
+BİR KEZ kontrol ediyordu - fiyat o 40 dakika içinde ne kadar kötüye
+giderse gitsin, sadece o anki durum değerlendiriliyordu. Sonuç: AIO
+-15.97$ ile kapandı - "küçük zarar" beklentisinin aksine neredeyse
+normal SL büyüklüğünde bir kayıp oldu, çünkü 40 dakika boyunca hiç
+SÜREKLİ bir koruma yoktu. Düzeltme: artık ilk 40 dakika boyunca HER
+kontrolde (5 saniyede bir) fiyat %0.8'i aşarsa aleyhimize, HEMEN
+çıkılıyor - kayıp gerçekten küçük kalıyor. Eski "40. dakikada hâlâ hiç
+ilerleme yoksa çık" kontrolü de korunuyor, ikisi birlikte çalışıyor.
 
 v1.2 (15.09.2026, kullanıcı kararıyla — gerçek sanal veri analiziyle
 bulundu): LA (-22.65$) ve MINA (-28.01$) işlemlerinde hiç kismi_kar_alma
 tetiklenmedi - pozisyon hiç lehte hareket etmeden doğrudan tam SL'e
 gitti. Bu iki kayıp tek başına, o ana kadarki en büyük kazananı (PONS,
-+44$) geride bırakacak büyüklükteydi. ERKEN GÜVENLİK ÇIKIŞI eklendi:
-pozisyon 40 dakika içinde en az %0.3 lehte ilerlemezse, "sinyal baştan
-yanlıştı" kabul edilip küçük bir zararla erken çıkılır - tam SL'e kadar
-beklenmez. Amaç: kısmi kâr almanın hiç tetiklenmediği "yanlış sinyal"
-durumlarını büyük kayba dönüşmeden erken kesmek.
++44$) geride bırakacak büyüklükteydi. ERKEN GÜVENLİK ÇIKIŞI eklendi
+(sonradan v1.3'te düzeltildi - bkz. yukarısı).
 
 v1.1 (14.09.2026, kullanıcı kararıyla — "daha fazla kâr alalım" isteğiyle):
   Sabit hedef %3'ten %5'e çıkarıldı. Gerekçe: ilk gerçek sanal işlemlerde
@@ -155,6 +163,21 @@ MAX_HOLD_SAAT = float(os.getenv("MAX_HOLD_SAAT", "6"))
 ERKEN_GUVENLIK_CIKISI_AKTIF = os.getenv("ERKEN_GUVENLIK_CIKISI_AKTIF", "true").lower() == "true"
 ERKEN_GUVENLIK_SURE_DK = float(os.getenv("ERKEN_GUVENLIK_SURE_DK", "40"))
 ERKEN_GUVENLIK_MIN_ILERLEME_PCT = float(os.getenv("ERKEN_GUVENLIK_MIN_ILERLEME_PCT", "0.3"))
+
+# v1.3 GÜNCELLEME (15.09.2026, kullanıcı kararıyla - gerçek sonuçla
+# bulunan hata): v1.2'deki mekanizma sadece TAM 40. dakikada bir kez
+# kontrol ediyordu - fiyat o 40 dakika içinde ne kadar kötüye giderse
+# gitsin, sadece o anki duruma bakılıyordu. Sonuç: AIO -15.97$ ile
+# kapandı - "küçük zarar" beklentisinin aksine, neredeyse normal SL
+# büyüklüğünde bir kayıp oldu, çünkü 40 dakika boyunca hiç sürekli bir
+# koruma yoktu. Çözüm: SÜREKLİ, dar bir erken-dönem koruması eklendi -
+# ilk ERKEN_GUVENLIK_SURE_DK dakika boyunca HER kontrolde (5 saniyede
+# bir), fiyat ERKEN_GUVENLIK_MAX_ZARAR_PCT'i aşarsa aleyhimize, HEMEN
+# çıkılır - 40 dakika beklemeye gerek yok. Bu, gerçekten küçük bir
+# zararda kalmayı garanti eder. Eski "momentum yok" kontrolü (40.
+# dakikada hâlâ hiç ilerleme yoksa çık) da korunuyor, ikisi birlikte
+# çalışıyor.
+ERKEN_GUVENLIK_MAX_ZARAR_PCT = float(os.getenv("ERKEN_GUVENLIK_MAX_ZARAR_PCT", "0.8"))
 KOMISYON_PCT = float(os.getenv("KOMISYON_PCT", "0.0006"))
 COOLDOWN_SAAT = 1.0
 
@@ -542,24 +565,26 @@ def manage_loop():
                     sanal_pozisyon_kapat(sym, "max_hold_timeout")
                     continue
 
-                # ── v1.2 YENİ: ERKEN GÜVENLİK ÇIKIŞI ──
-                # Pozisyon ERKEN_GUVENLIK_SURE_DK dakikayı geçtiyse ve
-                # henüz kısmi kâr alınmadıysa VE fiyat en az
-                # ERKEN_GUVENLIK_MIN_ILERLEME_PCT kadar bile lehte hareket
-                # etmediyse, "sinyal baştan yanlıştı" kabul edilir ve
-                # tam SL'e kadar beklenmeden küçük bir zararla çıkılır.
-                if (ERKEN_GUVENLIK_CIKISI_AKTIF and not durum.get("kismi_alindi", False)
-                        and not durum.get("erken_kontrol_yapildi", False)):
+                # ── v1.3 GÜNCEL: ERKEN GÜVENLİK ÇIKIŞI (sürekli + momentum) ──
+                # 1) SÜREKLİ KORUMA: ilk ERKEN_GUVENLIK_SURE_DK dakika boyunca,
+                #    HER kontrolde fiyat ERKEN_GUVENLIK_MAX_ZARAR_PCT'i aşarsa
+                #    aleyhimize, HEMEN çıkılır - kayıp gerçekten küçük kalır.
+                # 2) MOMENTUM KONTROLÜ: süre dolduğunda (tam ERKEN_GUVENLIK_SURE_DK
+                #    dakikada) hâlâ hiç anlamlı ilerleme yoksa, o noktada da çıkılır.
+                if ERKEN_GUVENLIK_CIKISI_AKTIF and not durum.get("kismi_alindi", False):
                     gecen_dk = (time.time() - durum["acilis_zamani"]) / 60
-                    if gecen_dk >= ERKEN_GUVENLIK_SURE_DK:
-                        ilerleme_pct = ((guncel - durum["entry"]) / durum["entry"] * 100 if long_mu
-                                         else (durum["entry"] - guncel) / durum["entry"] * 100)
+                    ilerleme_pct = ((guncel - durum["entry"]) / durum["entry"] * 100 if long_mu
+                                     else (durum["entry"] - guncel) / durum["entry"] * 100)
+
+                    if gecen_dk < ERKEN_GUVENLIK_SURE_DK:
+                        if ilerleme_pct <= -ERKEN_GUVENLIK_MAX_ZARAR_PCT:
+                            sanal_pozisyon_kapat(sym, "erken_guvenlik_cikisi")
+                            continue
+                    elif not durum.get("erken_kontrol_yapildi", False):
                         if ilerleme_pct < ERKEN_GUVENLIK_MIN_ILERLEME_PCT:
                             sanal_pozisyon_kapat(sym, "erken_guvenlik_cikisi")
                             continue
                         else:
-                            # Yeterince ilerlemiş, bir daha bu kontrolü yapma -
-                            # normal SL/TP/kısmi kâr mantığına bırak.
                             with state_lock:
                                 if sym in trade_state:
                                     trade_state[sym]["erken_kontrol_yapildi"] = True
@@ -751,9 +776,10 @@ def panel_ayarlar_metni():
             f"  Tam hedef: %{HEDEF_PCT*100:.1f}\n"
             f"  SL: avlanma noktası bazlı (taban %{MIN_SL_PCT*100:.0f}, tavan %{MAX_SL_PCT*100:.0f})\n"
             f"  Max tutma: {MAX_HOLD_SAAT:.0f} saat\n"
-            f"  [v1.2] Erken güvenlik çıkışı: {ERKEN_GUVENLIK_SURE_DK:.0f} dk içinde en az "
-            f"%{ERKEN_GUVENLIK_MIN_ILERLEME_PCT} ilerlemezse küçük zararla çıkılır "
-            f"({'AKTİF' if ERKEN_GUVENLIK_CIKISI_AKTIF else 'KAPALI'})\n\n"
+            f"  [v1.3] Erken güvenlik çıkışı: ilk {ERKEN_GUVENLIK_SURE_DK:.0f} dk boyunca SÜREKLİ "
+            f"kontrol - fiyat %{ERKEN_GUVENLIK_MAX_ZARAR_PCT} aleyhe giderse HEMEN çıkılır; "
+            f"{ERKEN_GUVENLIK_SURE_DK:.0f} dk dolduğunda hâlâ %{ERKEN_GUVENLIK_MIN_ILERLEME_PCT} "
+            f"ilerleme yoksa da çıkılır ({'AKTİF' if ERKEN_GUVENLIK_CIKISI_AKTIF else 'KAPALI'})\n\n"
             "⚠️ Bu strateji hiç test edilmedi (backtest dahil) - amaç veriyi "
             "sanal ortamda toplayıp gerçek bir sonuca ulaşmak.")
 
@@ -870,7 +896,7 @@ def telebot_polling_baslat():
 
 
 def tarama_loop():
-    tg(f"🎯 PAPER LİKİDİTE AVI BOTU v1.2 başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"
+    tg(f"🎯 PAPER LİKİDİTE AVI BOTU v1.3 başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"
        f"Sanal bakiye: {SANAL_BASLANGIC_BAKIYE:.0f}$ | İşlem büyüklüğü: sabit {SANAL_ISLEM_BUYUKLUGU_USDT:.0f}$ ({LEV}x)\n"
        f"MAX_POS={MAX_POS}\n\n"
        f"Strateji: likidite avı sonrası tersine dönüş\n"
@@ -881,9 +907,9 @@ def tarama_loop():
        f"tam hedef %{HEDEF_PCT*100:.1f}\n"
        f"SL: avlanma noktasının ötesinde (taban %{MIN_SL_PCT*100:.0f}, tavan %{MAX_SL_PCT*100:.0f})\n"
        f"Max tutma: {MAX_HOLD_SAAT:.0f} saat\n"
-       f"[v1.2 YENİ] Erken güvenlik çıkışı: {ERKEN_GUVENLIK_SURE_DK:.0f} dk içinde en az "
-       f"%{ERKEN_GUVENLIK_MIN_ILERLEME_PCT} ilerlemezse küçük zararla erken çıkılır - "
-       f"amaç 'baştan yanlış sinyal' durumlarını büyük SL kaybına dönüşmeden kesmek\n\n"
+       f"[v1.3 YENİ] Erken güvenlik çıkışı: ilk {ERKEN_GUVENLIK_SURE_DK:.0f} dk boyunca SÜREKLİ "
+       f"kontrol - fiyat %{ERKEN_GUVENLIK_MAX_ZARAR_PCT} aleyhe giderse HEMEN çıkılır (küçük "
+       f"zarar garantisi); süre dolduğunda hâlâ ilerleme yoksa da çıkılır\n\n"
        f"⚠️ Bu strateji hiç test edilmedi - amaç veriyi sanal ortamda toplamak.\n")
 
     while True:
@@ -931,7 +957,7 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("PAPER LİKİDİTE AVI BOTU v1.2 BAŞLIYOR... (SANAL PARA, GERÇEK İŞLEM YOK)")
+    print("PAPER LİKİDİTE AVI BOTU v1.3 BAŞLIYOR... (SANAL PARA, GERÇEK İŞLEM YOK)")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
     bakiye_diskten_yukle()
