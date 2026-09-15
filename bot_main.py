@@ -560,6 +560,224 @@ def ozet_yaz():
     return "\n".join(satirlar)
 
 
+def panel_ozet_metni():
+    return ozet_yaz()
+
+
+def panel_gecmis_metni():
+    with log_lock:
+        gecmis = list(trade_log)
+    if not gecmis:
+        return "📜 Henüz kapanan işlem yok."
+    satirlar = ["📜 SON 15 İŞLEM (SANAL)\n"]
+    for t in list(reversed(gecmis))[:15]:
+        emoji = "🟢" if t["pnl"] >= 0 else "🔴"
+        yon_etiket = "LONG" if t.get("yon", "long") == "long" else "SHORT"
+        satirlar.append(f"{emoji} {t['symbol'].split('/')[0]} {yon_etiket} {t['pnl']:+.2f}$ "
+                         f"[{t.get('not','?')}]\n   {t['zaman']} | fitil:%{t.get('fitil_kirilma_pct','?')} "
+                         f"geri dönüş:%{t.get('geri_donus_pct','?')}")
+    return "\n".join(satirlar)
+
+
+def panel_analiz_metni():
+    with log_lock:
+        gecmis = list(trade_log)
+    if not gecmis:
+        return "🔬 ANALİZ (SANAL)\n\nHenüz kapanan işlem yok."
+    satirlar = ["🔬 ANALİZ (SANAL)\n", "🚪 Kapanış sebebine göre:"]
+    for sebep in sorted(set(t.get("not", "?") for t in gecmis)):
+        alt = [t for t in gecmis if t.get("not") == sebep]
+        net = sum(t["pnl"] for t in alt)
+        w = len([t for t in alt if t["pnl"] > 0])
+        satirlar.append(f"  {sebep}: {len(alt)} işlem, %{w/len(alt)*100:.0f} kazanma, net {net:+.2f}$")
+
+    long_islem = [t for t in gecmis if t.get("yon") == "long"]
+    short_islem = [t for t in gecmis if t.get("yon") == "short"]
+    if long_islem:
+        satirlar.append(f"\n🟢 LONG: {len(long_islem)} işlem, net {sum(t['pnl'] for t in long_islem):+.2f}$")
+    if short_islem:
+        satirlar.append(f"🔴 SHORT: {len(short_islem)} işlem, net {sum(t['pnl'] for t in short_islem):+.2f}$")
+
+    coin_pnl = {}
+    for t in gecmis:
+        sym = t["symbol"].split("/")[0]
+        coin_pnl[sym] = coin_pnl.get(sym, 0) + t["pnl"]
+    siralanmis = sorted(coin_pnl.items(), key=lambda x: x[1], reverse=True)
+    kazandiranlar = [x for x in siralanmis if x[1] > 0][:3]
+    kaybettirenler = [x for x in siralanmis if x[1] < 0][-3:][::-1]
+    if kazandiranlar:
+        satirlar.append("\n🏆 En kazandıran coinler:")
+        for sym, pnl in kazandiranlar:
+            satirlar.append(f"  {sym}: {pnl:+.2f}$")
+    if kaybettirenler:
+        satirlar.append("💀 En kaybettiren coinler:")
+        for sym, pnl in kaybettirenler:
+            satirlar.append(f"  {sym}: {pnl:+.2f}$")
+    return "\n".join(satirlar)
+
+
+def panel_risk_metni():
+    with state_lock:
+        durumlar = dict(trade_state)
+    satirlar = ["📉 AÇIK SANAL POZİSYON DETAYI\n"]
+    if not durumlar:
+        satirlar.append("Açık pozisyon yok.")
+        return "\n".join(satirlar)
+    for sym, d in durumlar.items():
+        try:
+            t = exchange.fetch_ticker(sym)
+            guncel = safe(t["last"])
+            entry = d["entry"]
+            long_mu = d.get("yon", "long") == "long"
+            yon_etiket = "LONG" if long_mu else "SHORT"
+            pnl_pct = (guncel - entry) / entry * 100 if long_mu else (entry - guncel) / entry * 100
+            anlik_kar = pnl_pct / 100 * d.get("notional", 0)
+            sure_dk = (time.time() - d["acilis_zamani"]) / 60
+            kalan_dk = MAX_HOLD_SAAT * 60 - sure_dk
+            satirlar.append(f"{sym} {yon_etiket} (fitil:%{d.get('fitil_kirilma_pct','?')} "
+                             f"geri dönüş:%{d.get('geri_donus_pct','?')})\n"
+                             f"  Giriş:{entry:.6f} Şimdi:{guncel:.6f} (%{pnl_pct:+.2f})\n"
+                             f"  Anlık PnL: {anlik_kar:+.2f}$ | SL:{d['sl']:.6f} | TP:{d.get('tp',0):.6f}\n"
+                             f"  Kısmi kâr alındı: {'Evet' if d.get('kismi_alindi') else 'Hayır'}\n"
+                             f"  Açık süre: {sure_dk:.0f} dk | Max tutmaya kalan: {max(0,kalan_dk):.0f} dk")
+        except Exception:
+            satirlar.append(f"{sym} (fiyat alınamadı)")
+    return "\n".join(satirlar)
+
+
+def panel_ayarlar_metni():
+    with bakiye_lock:
+        bakiye = sanal_bakiye["deger"]
+    return ("⚙️ PAPER LİKİDİTE AVI BOTU AYARLARI (SANAL PARA)\n\n"
+            "⚠️ Bu bot GERÇEK PARA KULLANMAZ - tüm işlemler sanaldır.\n\n"
+            f"Sanal bakiye: {bakiye:.2f}$ (başlangıç: {SANAL_BASLANGIC_BAKIYE:.0f}$)\n"
+            f"İşlem büyüklüğü: sabit ${SANAL_ISLEM_BUYUKLUGU_USDT:.0f} (bileşik büyüme YOK), {LEV}x kaldıraç\n"
+            f"MAX_POS: {MAX_POS}\n\n"
+            "Strateji: Likidite avı sonrası tersine dönüş\n"
+            f"  1) Fitil, önceki {LOOKBACK_MUM} mumun dip/tepesini en az %{AVLANMA_MIN_FITIL_PCT} kırmalı\n"
+            f"  2) Kapanış, kırılan seviyenin en az %{GERI_DONUS_MIN_PCT} içine geri dönmeli\n"
+            f"  3) Hacim, {HACIM_TEYIT_PERIYOT} mum ortalamasının en az {HACIM_TEYIT_KATSAYI}x'i olmalı\n\n"
+            "Çıkış:\n"
+            f"  Kısmi kâr alma: %{KISMI_KAR_ESIK_PCT*100:.1f}'te miktarın %{KISMI_KAR_ORANI*100:.0f}'i "
+            f"kapatılır, kalan SL'i breakeven'e çekilir\n"
+            f"  Tam hedef: %{HEDEF_PCT*100:.1f}\n"
+            f"  SL: avlanma noktası bazlı (taban %{MIN_SL_PCT*100:.0f}, tavan %{MAX_SL_PCT*100:.0f})\n"
+            f"  Max tutma: {MAX_HOLD_SAAT:.0f} saat\n\n"
+            "⚠️ Bu strateji hiç test edilmedi (backtest dahil) - amaç veriyi "
+            "sanal ortamda toplayıp gerçek bir sonuca ulaşmak.")
+
+
+def ana_menu_klavye():
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(
+        telebot.types.InlineKeyboardButton("📊 Özet", callback_data="paper_ozet"),
+        telebot.types.InlineKeyboardButton("⚙️ Ayarlar", callback_data="paper_ayarlar"),
+    )
+    markup.row(
+        telebot.types.InlineKeyboardButton("📜 Geçmiş", callback_data="paper_gecmis"),
+        telebot.types.InlineKeyboardButton("🔬 Analiz", callback_data="paper_analiz"),
+    )
+    markup.row(telebot.types.InlineKeyboardButton("📉 Açık Pozisyon Detayı", callback_data="paper_risk"))
+    markup.row(telebot.types.InlineKeyboardButton("🔄 Yenile", callback_data="paper_ana"))
+    return markup
+
+
+def geri_butonu():
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.row(telebot.types.InlineKeyboardButton("⬅️ Menüye Dön", callback_data="paper_ana"))
+    return markup
+
+
+def yetkili_mi(msg_or_call):
+    if not CHAT_ID:
+        return True
+    try:
+        chat_id = msg_or_call.message.chat.id if hasattr(msg_or_call, "message") else msg_or_call.chat.id
+    except Exception:
+        return False
+    return chat_id == CHAT_ID
+
+
+if bot:
+    @bot.message_handler(commands=["panel"])
+    def panel_komutu(msg):
+        if not yetkili_mi(msg):
+            return
+        bot.send_message(msg.chat.id, panel_ozet_metni(), reply_markup=ana_menu_klavye())
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("paper_"))
+    def panel_buton_yaniti(call):
+        if not yetkili_mi(call):
+            try: bot.answer_callback_query(call.id)
+            except Exception: pass
+            return
+        veri = call.data
+        try:
+            if veri == "paper_ana":
+                bot.edit_message_text(panel_ozet_metni(), call.message.chat.id, call.message.message_id, reply_markup=ana_menu_klavye())
+            elif veri == "paper_ozet":
+                bot.edit_message_text(panel_ozet_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
+            elif veri == "paper_ayarlar":
+                bot.edit_message_text(panel_ayarlar_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
+            elif veri == "paper_gecmis":
+                bot.edit_message_text(panel_gecmis_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
+            elif veri == "paper_analiz":
+                bot.edit_message_text(panel_analiz_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
+            elif veri == "paper_risk":
+                bot.edit_message_text(panel_risk_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
+            bot.answer_callback_query(call.id)
+        except Exception as e:
+            if "message is not modified" not in str(e):
+                log.warning(f"[PANEL_BUTON] {e}")
+            try: bot.answer_callback_query(call.id, "Tamam")
+            except Exception: pass
+
+    @bot.message_handler(commands=["ozet"])
+    def ozet_komutu(msg):
+        if not yetkili_mi(msg):
+            return
+        bot.send_message(msg.chat.id, panel_ozet_metni())
+
+    @bot.message_handler(commands=["durum"])
+    def durum_komutu(msg):
+        if not yetkili_mi(msg):
+            return
+        bot.send_message(msg.chat.id, panel_risk_metni())
+
+    @bot.message_handler(commands=["gecmis"])
+    def gecmis_komutu(msg):
+        if not yetkili_mi(msg):
+            return
+        bot.send_message(msg.chat.id, panel_gecmis_metni())
+
+    @bot.message_handler(commands=["analiz"])
+    def analiz_komutu(msg):
+        if not yetkili_mi(msg):
+            return
+        bot.send_message(msg.chat.id, panel_analiz_metni())
+
+    @bot.message_handler(commands=["sifirlagecmis"])
+    def sifirlagecmis_komutu(msg):
+        if not yetkili_mi(msg):
+            return
+        global trade_log
+        with log_lock:
+            trade_log = []
+        atomik_yaz(LOG_PATH, [])
+        bot.send_message(msg.chat.id, "🗑️ Sanal işlem geçmişi sıfırlandı.")
+
+
+def telebot_polling_baslat():
+    if not bot:
+        return
+    while True:
+        try:
+            bot.infinity_polling(timeout=30, long_polling_timeout=30)
+        except Exception as e:
+            log.error(f"[TELEBOT_POLL] {e}")
+            time.sleep(5)
+
+
 def tarama_loop():
     tg(f"🎯 PAPER LİKİDİTE AVI BOTU başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"
        f"Sanal bakiye: {SANAL_BASLANGIC_BAKIYE:.0f}$ | İşlem büyüklüğü: sabit {SANAL_ISLEM_BUYUKLUGU_USDT:.0f}$ ({LEV}x)\n"
@@ -625,4 +843,5 @@ if __name__ == "__main__":
     bakiye_diskten_yukle()
     trade_log_yukle()
     threading.Thread(target=manage_loop, daemon=True).start()
+    threading.Thread(target=telebot_polling_baslat, daemon=True).start()
     tarama_loop()
