@@ -2,7 +2,14 @@
 """
 ════════════════════════════════════════════════════════
 PAPER BOT — LİKİDİTE AVI SONRASI TERSİNE DÖNÜŞ (SANAL PARA)
-14 Eylül 2026 (v1.0)
+14 Eylül 2026 (v1.0) → 14 Eylül 2026 (v1.1)
+
+v1.1 (14.09.2026, kullanıcı kararıyla — "daha fazla kâr alalım" isteğiyle):
+  Sabit hedef %3'ten %5'e çıkarıldı. Gerekçe: ilk gerçek sanal işlemlerde
+  (AIN, CAP) hareketin %3'ün oldukça üzerine çıktığı görüldü - kısmi kâr
+  alma sonrası kalan pozisyon daha büyük bir hedefi deneyebilir. Bedel:
+  hedefe ulaşma süresi uzayabilir, zayıf hareketlerde max_hold_timeout'a
+  düşme ihtimali artar. Kısmi kâr alma eşiği (%1.2) değişmedi.
 
 ⚠️ BU BOT SADECE SANAL (PAPER) İŞLEM YAPAR. GERÇEK EMİR AÇMAZ,
 GERÇEK PARA KULLANMAZ. Sadece halka açık piyasa verisini (OHLCV,
@@ -113,7 +120,7 @@ HACIM_TEYIT_KATSAYI = float(os.getenv("HACIM_TEYIT_KATSAYI", "1.3"))  # avlanma 
 HACIM_TEYIT_PERIYOT = int(os.getenv("HACIM_TEYIT_PERIYOT", "20"))
 
 # ── ÇIKIŞ PARAMETRELERİ (gerçek canlı bottan öğrenilen dersler) ──
-HEDEF_PCT = float(os.getenv("HEDEF_PCT", "0.03"))  # sabit hedef %3 (likidite avı stratejisi daha hızlı/küçük hareketler hedefler)
+HEDEF_PCT = float(os.getenv("HEDEF_PCT", "0.05"))  # v1.1: %3'ten %5'e çıkarıldı - kullanıcı kararı, gerçek sonuçlarda (AIN, CAP) hareketin %3'ün oldukça üzerine çıktığı görüldü
 SL_BUFFER_PCT = float(os.getenv("SL_BUFFER_PCT", "0.005"))  # fitilin ötesine ek pay
 MIN_SL_PCT = float(os.getenv("MIN_SL_PCT", "0.02"))
 MAX_SL_PCT = float(os.getenv("MAX_SL_PCT", "0.04"))
@@ -809,7 +816,7 @@ def telebot_polling_baslat():
 
 
 def tarama_loop():
-    tg(f"🎯 PAPER LİKİDİTE AVI BOTU başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"
+    tg(f"🎯 PAPER LİKİDİTE AVI BOTU v1.1 başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"
        f"Sanal bakiye: {SANAL_BASLANGIC_BAKIYE:.0f}$ | İşlem büyüklüğü: sabit {SANAL_ISLEM_BUYUKLUGU_USDT:.0f}$ ({LEV}x)\n"
        f"MAX_POS={MAX_POS}\n\n"
        f"Strateji: likidite avı sonrası tersine dönüş\n"
@@ -867,7 +874,7 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("PAPER LİKİDİTE AVI BOTU BAŞLIYOR... (SANAL PARA, GERÇEK İŞLEM YOK)")
+    print("PAPER LİKİDİTE AVI BOTU v1.1 BAŞLIYOR... (SANAL PARA, GERÇEK İŞLEM YOK)")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
     bakiye_diskten_yukle()
