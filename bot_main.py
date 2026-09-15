@@ -538,25 +538,55 @@ def ozet_yaz():
     with bakiye_lock:
         bakiye = sanal_bakiye["deger"]
     with state_lock:
-        acik = len(trade_state)
+        durumlar = dict(trade_state)
+    acik_sayi = len(durumlar)
+
+    gerceklesmeyen_net = 0.0
+    acik_detay = []
+    for sym, d in durumlar.items():
+        try:
+            t = exchange.fetch_ticker(sym)
+            guncel = safe(t["last"])
+            entry = d["entry"]
+            notional = d.get("notional", 0)
+            long_mu = d.get("yon", "long") == "long"
+            anlik = (guncel - entry) / entry * notional if long_mu else (entry - guncel) / entry * notional
+            gerceklesmeyen_net += anlik
+            acik_detay.append((sym, anlik))
+        except Exception:
+            continue
 
     satirlar = [
         "🎯 PAPER LİKİDİTE AVI BOTU — SANAL ÖZET",
-        "(GERÇEK PARA DEĞİL - simülasyon)",
+        "(GERÇEK PARA DEĞİL - simülasyon, likidite avı sonrası tersine dönüş)",
         "━━━━━━━━━━━━━━━━━━━━",
         f"💼 Sanal bakiye: {bakiye:.2f}$ (başlangıç: {SANAL_BASLANGIC_BAKIYE:.0f}$)",
-        f"📈 Açık pozisyon: {acik}/{MAX_POS}",
-        "━━━━━━━━━━━━━━━━━━━━",
     ]
+    if acik_sayi > 0:
+        gc_emoji = "🟢" if gerceklesmeyen_net >= 0 else "🔴"
+        satirlar.append(f"{gc_emoji} Açık pozisyonlarda (gerçekleşmemiş): {gerceklesmeyen_net:+.2f}$")
+    satirlar.append("━━━━━━━━━━━━━━━━━━━━\n")
+
     if gecmis:
         toplam = len(gecmis)
         kazanan = [t for t in gecmis if t["pnl"] > 0]
         net = sum(t["pnl"] for t in gecmis)
         wr = len(kazanan) / toplam * 100
-        satirlar.append(f"Toplam işlem: {toplam} | Kazanma: %{wr:.1f}")
-        satirlar.append(f"Net PnL: {net:+.2f}$ | Ortalama: {net/toplam:+.3f}$")
+        satirlar.append("📊 İstatistik")
+        satirlar.append(f"  Toplam işlem: {toplam}  |  Kazanma: %{wr:.1f}")
+        satirlar.append(f"  Net PnL: {net:+.2f}$  |  Ortalama: {net/toplam:+.3f}$\n")
+        satirlar.append("📋 Son 5 işlem:")
+        for t in list(reversed(gecmis))[:5]:
+            emoji = "🟢" if t["pnl"] >= 0 else "🔴"
+            sebep = t.get("not", "")
+            satirlar.append(f"  {emoji} {t['symbol'].split('/')[0]:<8} {t['pnl']:+.2f}$  ({sebep})")
     else:
         satirlar.append("Henüz kapanan işlem yok.")
+
+    satirlar.append(f"\n📈 Açık pozisyon: {acik_sayi}/{MAX_POS}")
+    for sym, anlik in acik_detay:
+        e = "🟢" if anlik >= 0 else "🔴"
+        satirlar.append(f"  {e} {sym.split('/')[0]:<8} {anlik:+.2f}$")
     return "\n".join(satirlar)
 
 
