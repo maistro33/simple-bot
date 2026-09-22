@@ -1,70 +1,58 @@
 #!/usr/bin/env python3
 """
 ════════════════════════════════════════════════════════
-PAPER BOT — ÇOKLU ZAMAN DİLİMİ TREND UYUMU (SANAL PARA)
-16 Eylül 2026 (v1.0)
+PAPER BOT — GÜNÜN EN ÇOK YÜKSELENİ / EN VOLATİLİ, KORUMALI (SANAL PARA)
+16 Eylül 2026 (v1.0) → 22 Eylül 2026 (v2.0 - korumalı)
+
+v2.0 (22.09.2026, kullanıcı isteğiyle): Bu bot artık orijinal
+paper_yukselen_bot.py (KORUMASIZ, v1.0) ile PARALEL çalışıyor - amaç
+A/B karşılaştırması. Canlı bot v4.1/v4.2'de doğrulanmış iki koruma
+eklendi: zirveden mesafe filtresi (tam tepede alım önlenir) + erken
+güvenlik çıkışı (sürekli kontrol, kötü giden işlem büyük SL'e
+dönüşmeden erken kesilir). Orijinal bot DEĞİŞTİRİLMEDİ, kontrol grubu
+olarak kalıyor.
 
 ⚠️ BU BOT SADECE SANAL (PAPER) İŞLEM YAPAR. GERÇEK EMİR AÇMAZ,
 GERÇEK PARA KULLANMAZ.
 
-KÖKEN VE DERİN ARAŞTIRMA SÜRECİ (16.09.2026):
-Bu stratejiye ulaşmadan önce, gerçek Bitget verisiyle (136 coin, ~51
-gün, 15 dakikalık mumlar - Bitget'in mum API'sinin sayfalama hatası
-düzeltildikten sonra elde edilen DOĞRU veri) şu fikirler büyük ölçekte
-test edildi ve HEPSİ NET ZARARLI çıktı:
-  1) Likidite avı sonrası tersine dönüş (fitil kırılımı + geri dönüş +
-     hacim teyidi): 2623 işlem, net -6323$
-  2) Fonlama oranı bazlı kalabalığa karşı pozisyon: 2294 işlem, net -6507$
-  3) Kırılım YÖNÜNDE devam (tersinin tersi): 3439 işlem, net -9800$
-  4) Yukarıdaki stratejilerin çok sayıda TP/SL/eşik kombinasyonu
-     (30+ farklı parametre seti denendi) - hiçbiri net pozitif çıkmadı.
-  5) Sabit R:R denemeleri (SL'i TP'den küçük tutmak dahil, 2:1 lehte
-     oran bile) - kazanma oranı (%32) o kadar düşük çıktı ki lehte R:R
-     bile yetersiz kaldı.
-Bu testler şunu KANITLADI: sorun "hangi yöne bahis oynadığımız" ya da
-"SL/TP oranı" değildi - kullanılan GİRİŞ SİNYALLERİNİN (fiyat fitili,
-fonlama oranı) kendisi piyasa yönünü rastgeleden daha iyi tahmin
-etmiyordu.
+STRATEJİ KÖKENİ (16.09.2026, kullanıcı isteğiyle bulundu):
+"Günün en çok yükselen veya volatilitesi en yüksek coinlerine gir,
+küçük kâr al çık" fikri, 136 coin/~51 günlük gerçek Bitget verisinde
+büyük ölçekli backtest edildi:
+  - Tüm coinler arasında son 24 saatteki getirisi üst %10'luk dilimde
+    olanlar seçildi, hacim teyidi + yükselen kapanışla giriş yapıldı,
+    sabit %6 hedef / %6 SL ile çıkıldı.
+  - Sonuç: 2283 işlem, %48.2 kazanma, NET +7254$ (sabit $100/işlem,
+    10x kaldıraç varsayımıyla)
+  - KARARLILIK KONTROLÜ: TP/SL %4'ten %7'ye kadar, eşik yüzdeliği
+    %80'den %95'e kadar denendi - HER KOMBİNASYONDA net pozitif kaldı
+    (+2230$ ile +7740$ arası). Hem "en çok yükselen" (getiri) hem "en
+    volatil" (volatilite) sıralaması ayrı ayrı test edildi, ikisi de
+    pozitif çıktı.
+  - Bu istikrar, aynı gün büyük ölçekte test edilip BAŞARISIZ olan
+    diğer fikirlerden (likidite avı sonrası tersine dönüş: net -6323$,
+    fonlama oranı bazlı ters pozisyon: net -6507$) BELİRGİN ŞEKİLDE
+    FARKLI - gerçek bir sinyal olma ihtimalini güçlendiren bir işaret.
 
-SONRA DENENEN VE BAŞARILI ÇIKAN YAKLAŞIM:
-Canlı botun (live_bot v3.9) zaten gerçek parada kısmi başarı gösteren
-kendi mantığı - 1D+4H+1H üçlü zaman dilimi trend UYUMU + hacim teyidi +
-15m swing dip/tepe girişi - aynı büyük veri setinde (ekstra API çağrısı
-gerekmeden, 15m veriden resample edilerek) test edildi:
-  - TP=SL=%5, trend gücü eşiği %2: 704 işlem, net +1211$, %51.7 kazanma
-  - TP=%6/SL=%5, trend gücü eşiği %1: 937 işlem, net +1706$, %48.9 kazanma
-KARARLILIK KONTROLÜ: TP/SL %4'ten %8'e kadar, trend gücü eşiği %0.5'ten
-%4'e kadar denendi - SONUÇ HER KOMBİNASYONDA POZİTİF kaldı (net +442$
-ile +1706$ arası), kazanma oranı hep %48-52 bandında istikrarlı kaldı.
-Bu istikrar (komşu parametrelerde ani sıçrama olmaması), önceki
-başarısız stratejilerin gösterdiği kırılganlıktan (parametre değişince
-kâr/zarar tamamen tersine dönmesi) BELİRGİN ŞEKİLDE FARKLI - gerçek bir
-sinyal olma ihtimalini güçlendiren bir işaret.
+MANTIK: Bu temelde bir MOMENTUM DEVAMI stratejisi - "şu anda en güçlü
+hareket eden coin, kısa vadede o yönde devam etme eğiliminde olabilir"
+varsayımına dayanıyor. Fitil/tersine dönüş gibi karmaşık paternler
+yerine basit bir sıralama + hacim teyidi kullanıyor - bugünkü diğer
+denemelerden farklı olarak basitliği bir dezavantaj değil, avantaj
+gibi görünüyor.
 
 ⚠️ DÜRÜSTLÜK NOTU: "İstikrarlı ve büyük örneklemde pozitif" demek
-"garanti kazandırır" demek DEĞİLDİR. Bu hâlâ tek bir 51 günlük geçmiş
-dönem - farklı piyasa rejimlerinde (örn. uzun süreli düşüş piyasası)
-nasıl davranacağı bilinmiyor. Bu yüzden GERÇEK PARA DEĞİL, yine SANAL
-para ile canlı ortamda test ediliyor - amaç, backtest'teki istikrarın
-gerçek zamanlı, henüz görülmemiş veride de sürüp sürmediğini ölçmek.
+"garanti kazandırır" demek DEĞİLDİR. Tek bir 51 günlük geçmiş dönem
+test edildi. Bu yüzden GERÇEK PARA DEĞİL, sanal ortamda canlı test
+ediliyor.
 
-STRATEJİ MANTIĞI:
-  1) 1D trend YUKARI (ya da SHORT için AŞAĞI) - 20 periyot MA bazlı
-  2) 4H trend AYNI yönde
-  3) 1H trend AYNI yönde
-  4) 4H trend gücü (MA'dan uzaklık) en az %1 (backtest'te en iyi denge)
-  5) 15m'de swing dip/tepe + dönüş onayı (canlı botla birebir aynı)
-  6) Hacim teyidi: son mum hacmi, ortalamanın en az 1.3 katı
-
-ÇIKIŞ MANTIĞI (backtest'te en iyi/en kararlı sonucu veren):
-  TP: sabit %6 (SIRALI - iz sürme yok, hedefe ulaşınca kapanır)
-  SL: sabit %5 (canlı botun swing-bazlı SL'inden FARKLI - burada
-      basit sabit yüzde, backtest'te bu şekilde test edildi)
-  Max tutma: 8 saat (canlı botla tutarlı)
+DİNAMİK DAVRANIŞ: Bot her tarama turunda (60 saniyede bir) TÜM coin
+havuzunu yeniden sıralar - "şu an en sıcak" coinlere yönelir, sabit
+bir listeye takılı kalmaz. Aynı coin arka arkaya seçilebilir ama bu
+garantili değil, piyasa dinamiğine bağlıdır.
 
 SANAL PARAMETRELER: 500 USDT bakiye, işlem başına sabit 100 USDT
-marjin, 10x kaldıraç (kullanıcı talimatıyla, önceki paper bot ile
-tutarlı).
+marjin, 10x kaldıraç.
 ════════════════════════════════════════════════════════
 """
 
@@ -76,12 +64,11 @@ import threading
 import sys
 import ccxt
 import pandas as pd
-import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                      stream=sys.stdout, force=True)
-log = logging.getLogger("PAPER_TREND_UYUM")
+log = logging.getLogger("PAPER_YUKSELEN_V2")
 
 # ════════════════════════════════════════════
 # CONFIG
@@ -119,29 +106,38 @@ LEV = int(os.getenv("LEV", "10"))
 MAX_POS = int(os.getenv("MAX_POS", "3"))
 
 SLUGGISH_BASE = {"BTC", "ETH", "XRP", "ADA", "DOGE", "BNB", "TRX", "LINK", "LTC", "BCH"}
-ADAY_HAVUZU_BUYUKLUGU = 80
 KONTROL_ARALIGI_SN = 60
 
-# ── GİRİŞ PARAMETRELERİ (backtest'te en kararlı/en iyi sonucu veren) ──
-MA_PERIYOT = int(os.getenv("MA_PERIYOT", "20"))
-MIN_4H_TREND_GUCU_PCT = float(os.getenv("MIN_4H_TREND_GUCU_PCT", "1.0"))
-LOOKBACK_15M = int(os.getenv("LOOKBACK_15M", "20"))
-GIRIS_MAX_MESAFE_PCT = float(os.getenv("GIRIS_MAX_MESAFE_PCT", "0.02"))
-HACIM_TEYIT_KATSAYI = float(os.getenv("HACIM_TEYIT_KATSAYI", "1.3"))
+# ── GİRİŞ PARAMETRELERİ (backtest'te en iyi/en kararlı: getiri, üst %10) ──
+SIRALAMA_TIPI = os.getenv("SIRALAMA_TIPI", "getiri")  # "getiri" ya da "volatilite"
+UST_YUZDELIK = float(os.getenv("UST_YUZDELIK", "0.90"))  # üst %10'luk dilim
+HACIM_TEYIT_KATSAYI = float(os.getenv("HACIM_TEYIT_KATSAYI", "1.2"))
 HACIM_TEYIT_PERIYOT = int(os.getenv("HACIM_TEYIT_PERIYOT", "20"))
-SHORT_AKTIF = os.getenv("SHORT_AKTIF", "true").lower() == "true"
+MIN_HACIM_USDT = float(os.getenv("MIN_HACIM_USDT", "300000"))
 
-# ── ÇIKIŞ PARAMETRELERİ (backtest'te en iyi/en kararlı: TP%6, SL%5) ──
+# ── v2 YENİ: KORUMA MEKANİZMALARI (canlı bot v4.1/v4.2'de doğrulanmış) ──
+# Bu bot, orijinal paper_yukselen_bot.py'nin (korumasız kontrol grubu)
+# yanında PARALEL çalışacak - amaç, "korumalı vs korumasız" karşılaştırması
+# yapmak. Canlı botta HOT (-63$ tarzı) büyük tekil kayıpları önlemek için
+# eklenen iki mekanizma burada da test ediliyor.
+ZIRVE_LOOKBACK = int(os.getenv("ZIRVE_LOOKBACK", "20"))
+ZIRVEDEN_MIN_MESAFE_PCT = float(os.getenv("ZIRVEDEN_MIN_MESAFE_PCT", "0.015"))
+ERKEN_GUVENLIK_CIKISI_AKTIF = os.getenv("ERKEN_GUVENLIK_CIKISI_AKTIF", "true").lower() == "true"
+ERKEN_GUVENLIK_SURE_DK = float(os.getenv("ERKEN_GUVENLIK_SURE_DK", "40"))
+ERKEN_GUVENLIK_MAX_ZARAR_PCT = float(os.getenv("ERKEN_GUVENLIK_MAX_ZARAR_PCT", "1.0"))
+ERKEN_GUVENLIK_MIN_ILERLEME_PCT = float(os.getenv("ERKEN_GUVENLIK_MIN_ILERLEME_PCT", "0.3"))
+
+# ── ÇIKIŞ PARAMETRELERİ (backtest'te en iyi/en kararlı: TP=SL=%6) ──
 HEDEF_PCT = float(os.getenv("HEDEF_PCT", "0.06"))
-SL_PCT = float(os.getenv("SL_PCT", "0.05"))
+SL_PCT = float(os.getenv("SL_PCT", "0.06"))
 MAX_HOLD_SAAT = float(os.getenv("MAX_HOLD_SAAT", "8"))
 KOMISYON_PCT = float(os.getenv("KOMISYON_PCT", "0.0006"))
 COOLDOWN_SAAT = 1.0
 
-STATE_PATH = os.getenv("PAPER_STATE_PATH", "/data/paper_trend_state.json")
-LOG_PATH = os.getenv("PAPER_LOG_PATH", "/data/paper_trend_log.json")
-BAKIYE_PATH = os.getenv("PAPER_BAKIYE_PATH", "/data/paper_trend_bakiye.json")
-COOLDOWN_PATH = os.getenv("PAPER_COOLDOWN_PATH", "/data/paper_trend_cooldown.json")
+STATE_PATH = os.getenv("PAPER_STATE_PATH", "/data/paper_yukselen_v2_state.json")
+LOG_PATH = os.getenv("PAPER_LOG_PATH", "/data/paper_yukselen_v2_log.json")
+BAKIYE_PATH = os.getenv("PAPER_BAKIYE_PATH", "/data/paper_yukselen_v2_bakiye.json")
+COOLDOWN_PATH = os.getenv("PAPER_COOLDOWN_PATH", "/data/paper_yukselen_v2_cooldown.json")
 
 trade_state = {}
 state_lock = threading.Lock()
@@ -253,10 +249,7 @@ def safe(x):
         return 0.0
 
 
-# ════════════════════════════════════════════
-# VERİ ÇEKME
-# ════════════════════════════════════════════
-def get_df(sym, tf, limit=60):
+def get_df(sym, tf, limit=110):
     for deneme in range(3):
         try:
             candles = exchange.fetch_ohlcv(sym, tf, limit=limit + 1)
@@ -264,7 +257,7 @@ def get_df(sym, tf, limit=60):
                 return None
             candles = candles[:-1]
             df = pd.DataFrame(candles, columns=["ts", "open", "high", "low", "close", "volume"])
-            time.sleep(0.08)
+            time.sleep(0.05)
             return df
         except Exception as e:
             if "429" in str(e) or "Too Many Requests" in str(e):
@@ -290,7 +283,16 @@ def guncel_tickerlari_al():
     return _ticker_cache["veri"]
 
 
-def aday_havuzu():
+# ════════════════════════════════════════════
+# GÜNÜN EN ÇOK YÜKSELENİ / EN VOLATİLİ SIRALAMASI
+# ════════════════════════════════════════════
+def aday_havuzu_siralanmis():
+    """Tüm likit coinleri, son 24 saatteki getirilerine (ya da ticker
+    üzerinden volatilite yaklaşık değerine) göre sıralar - ekstra 15m
+    veri çekmeden, sadece ticker'lardaki 24s % değişim bilgisini
+    kullanır (SIRALAMA_TIPI='getiri' - backtest'te en iyi çıkan
+    yöntem). 'volatilite' seçilirse |değişim| kullanılır (kabaca bir
+    yaklaşım - gerçek std hesabı için OHLC geçmişi gerekirdi)."""
     tickers = guncel_tickerlari_al()
     if not tickers:
         return []
@@ -302,97 +304,46 @@ def aday_havuzu():
         if base in SLUGGISH_BASE:
             continue
         vol = t.get("quoteVolume") or 0
-        if vol < 300000:
+        if vol < MIN_HACIM_USDT:
             continue
         chg = t.get("percentage")
         if chg is None:
             continue
-        skor = abs(chg) * np.log10(max(vol, 10))
+        skor = chg if SIRALAMA_TIPI == "getiri" else abs(chg)
         adaylar.append((sym, skor))
-    adaylar.sort(key=lambda x: x[1], reverse=True)
-    return [sym for sym, _ in adaylar[:ADAY_HAVUZU_BUYUKLUGU]]
+
+    if not adaylar:
+        return []
+    skorlar = sorted([s for _, s in adaylar])
+    esik_idx = int(len(skorlar) * UST_YUZDELIK)
+    esik_idx = min(esik_idx, len(skorlar) - 1)
+    esik_deger = skorlar[esik_idx]
+    ust_dilim = [sym for sym, s in adaylar if s >= esik_deger]
+    return ust_dilim
 
 
-# ════════════════════════════════════════════
-# ÇOKLU ZAMAN DİLİMİ TREND UYUM SİNYALİ
-# (canlı bot v3.9 ile birebir aynı mantık, backtest'te doğrulanmış
-# TP/SL/eşik değerleriyle)
-# ════════════════════════════════════════════
-def trend_yonu(df, periyot=MA_PERIYOT):
-    if df is None or len(df) < periyot + 1:
-        return None
-    ma = df["close"].rolling(periyot).mean().iloc[-1]
-    fiyat = df["close"].iloc[-1]
-    if pd.isna(ma):
-        return None
-    return "yukselis" if fiyat > ma else "dusus"
-
-
-def trend_gucu_pct(df, periyot=MA_PERIYOT):
-    if df is None or len(df) < periyot + 1:
-        return None
-    ma = df["close"].rolling(periyot).mean().iloc[-1]
-    fiyat = df["close"].iloc[-1]
-    if pd.isna(ma) or ma == 0:
-        return None
-    return (fiyat - ma) / ma * 100
-
-
-def ucyon_sinyal(sym):
-    df_1d = get_df(sym, "1d", MA_PERIYOT + 10)
-    df_4h = get_df(sym, "4h", MA_PERIYOT + 5)
-    df_1h = get_df(sym, "1h", MA_PERIYOT + 5)
-
-    yon_1d = trend_yonu(df_1d)
-    yon_4h = trend_yonu(df_4h)
-    yon_1h = trend_yonu(df_1h)
-    guc_4h = trend_gucu_pct(df_4h)
-
-    if guc_4h is None:
+def giris_sinyali(sym):
+    """Üst dilimdeki coin için: hacim teyidi + yükselen kapanış şartı
+    + [v2 YENİ] zirveden mesafe filtresi (tam tepede alım önlenir)."""
+    df = get_df(sym, "15m", max(HACIM_TEYIT_PERIYOT, 20, ZIRVE_LOOKBACK) + 5)
+    if df is None or len(df) < HACIM_TEYIT_PERIYOT + 2:
         return None
 
-    long_uyumlu = (yon_1d == "yukselis" and yon_4h == "yukselis" and yon_1h == "yukselis"
-                   and guc_4h >= MIN_4H_TREND_GUCU_PCT)
-    short_uyumlu = (SHORT_AKTIF and yon_1d == "dusus" and yon_4h == "dusus" and yon_1h == "dusus"
-                    and guc_4h <= -MIN_4H_TREND_GUCU_PCT)
-
-    if not long_uyumlu and not short_uyumlu:
-        return None
-
-    df_15m = get_df(sym, "15m", max(LOOKBACK_15M, HACIM_TEYIT_PERIYOT) + 5)
-    if df_15m is None or len(df_15m) < LOOKBACK_15M + 2:
-        return None
-
-    pencere = df_15m.iloc[-(LOOKBACK_15M + 1):-1]
-    son_mum = df_15m.iloc[-1]
-
-    ort_hacim = df_15m["volume"].iloc[-(HACIM_TEYIT_PERIYOT + 1):-1].mean()
+    son_mum = df.iloc[-1]
+    ort_hacim = df["volume"].iloc[-(HACIM_TEYIT_PERIYOT + 1):-1].mean()
     if pd.isna(ort_hacim) or ort_hacim <= 0 or son_mum["volume"] < ort_hacim * HACIM_TEYIT_KATSAYI:
         return None
+    if son_mum["close"] <= son_mum["open"]:
+        return None
 
-    if long_uyumlu:
-        swing_nokta = pencere["low"].min()
-        kapanis_uygun = son_mum["close"] > son_mum["open"]
-        gecerli = kapanis_uygun and son_mum["close"] > swing_nokta
-        if gecerli:
-            mesafe = (son_mum["close"] - swing_nokta) / swing_nokta
-            if mesafe <= GIRIS_MAX_MESAFE_PCT:
-                return {"symbol": sym, "yon": "long", "entry": float(son_mum["close"]),
-                        "swing_nokta": float(swing_nokta), "1d": yon_1d, "4h": yon_4h, "1h": yon_1h,
-                        "guc_4h": round(guc_4h, 2)}
+    if len(df) >= ZIRVE_LOOKBACK:
+        zirve = df["high"].iloc[-ZIRVE_LOOKBACK:].max()
+        if zirve > 0:
+            zirve_mesafe = (zirve - son_mum["close"]) / zirve
+            if zirve_mesafe < ZIRVEDEN_MIN_MESAFE_PCT:
+                return None
 
-    if short_uyumlu:
-        swing_nokta = pencere["high"].max()
-        kapanis_uygun = son_mum["close"] < son_mum["open"]
-        gecerli = kapanis_uygun and son_mum["close"] < swing_nokta
-        if gecerli:
-            mesafe = (swing_nokta - son_mum["close"]) / swing_nokta
-            if mesafe <= GIRIS_MAX_MESAFE_PCT:
-                return {"symbol": sym, "yon": "short", "entry": float(son_mum["close"]),
-                        "swing_nokta": float(swing_nokta), "1d": yon_1d, "4h": yon_4h, "1h": yon_1h,
-                        "guc_4h": round(guc_4h, 2)}
-
-    return None
+    return {"symbol": sym, "yon": "long", "entry": float(son_mum["close"])}
 
 
 # ════════════════════════════════════════════
@@ -418,30 +369,23 @@ def _sanal_pozisyon_ac_ic(sym, sinyal):
     if cooldown_da_mi(sym):
         return
 
-    yon = sinyal["yon"]
-    long_mu = (yon == "long")
     entry = sinyal["entry"]
-
-    # BACKTEST'TE DOĞRULANMIŞ: sabit yüzde SL/TP (canlı botun swing bazlı
-    # SL'inden farklı - burada basit, simetriğe yakın oran kullanılıyor,
-    # çünkü büyük ölçekli test bunun daha istikrarlı sonuç verdiğini gösterdi)
-    sl = entry * (1 - SL_PCT) if long_mu else entry * (1 + SL_PCT)
-    tp = entry * (1 + HEDEF_PCT) if long_mu else entry * (1 - HEDEF_PCT)
+    sl = entry * (1 - SL_PCT)
+    tp = entry * (1 + HEDEF_PCT)
     notional = SANAL_ISLEM_BUYUKLUGU_USDT * LEV
     qty = notional / entry
 
     with state_lock:
         trade_state[sym] = {
-            "entry": entry, "sl": sl, "tp": tp, "yon": yon, "qty": qty,
+            "entry": entry, "sl": sl, "tp": tp, "yon": "long", "qty": qty,
             "notional": notional, "acilis_zamani": time.time(),
-            "1d": sinyal["1d"], "4h": sinyal["4h"], "1h": sinyal["1h"], "guc_4h": sinyal["guc_4h"],
+            "erken_kontrol_yapildi": False,
         }
     durumu_diske_yaz()
 
-    yon_emoji = "🟢 LONG" if long_mu else "🔴 SHORT"
-    tg(f"🎯 [PAPER-TREND] SİNYAL: {sym} {yon_emoji}\n"
+    tg(f"🚀 [PAPER-YUKSELEN-V2, korumalı] SİNYAL: {sym} 🟢 LONG\n"
        f"Giriş≈{entry:.6f} | SL:{sl:.6f} (%{SL_PCT*100:.0f}) | TP:{tp:.6f} (%{HEDEF_PCT*100:.0f})\n"
-       f"1D:{sinyal['1d']} 4H:{sinyal['4h']} 1H:{sinyal['1h']} | 4H güç: %{sinyal['guc_4h']:.1f}\n"
+       f"Sıralama: {SIRALAMA_TIPI}, üst %{(1-UST_YUZDELIK)*100:.0f}'luk dilim\n"
        f"Sanal işlem büyüklüğü: ${SANAL_ISLEM_BUYUKLUGU_USDT:.0f} ({LEV}x) — GERÇEK PARA DEĞİL")
 
 
@@ -451,9 +395,7 @@ def sanal_pozisyon_kapat(sym, sebep):
     if not durum:
         return
 
-    long_mu = durum.get("yon", "long") == "long"
     entry = durum["entry"]
-
     try:
         t = exchange.fetch_ticker(sym)
         guncel = safe(t["last"])
@@ -462,24 +404,23 @@ def sanal_pozisyon_kapat(sym, sebep):
         return
 
     qty = durum["qty"]
-    brut_pnl = (guncel - entry) * qty if long_mu else (entry - guncel) * qty
+    brut_pnl = (guncel - entry) * qty
     komisyon = (entry + guncel) * qty * KOMISYON_PCT
     net_pnl = brut_pnl - komisyon
 
     trade_log_kaydet({
         "symbol": sym, "entry": entry, "exit": guncel, "pnl": net_pnl,
-        "yon": durum.get("yon", "long"), "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
-        "not": sebep, "1d": durum.get("1d"), "4h": durum.get("4h"), "1h": durum.get("1h"),
-        "guc_4h": durum.get("guc_4h"),
+        "yon": "long", "zaman": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+        "not": sebep,
     })
     yeni_bakiye = bakiye_guncelle(net_pnl)
 
     with state_lock:
         trade_state.pop(sym, None)
     durumu_diske_yaz()
-    if sebep == "sl":
+    if sebep in ("sl", "erken_guvenlik_cikisi"):
         cooldown_uygula(sym)
-    tg(f"{'🟢' if net_pnl>=0 else '🔴'} [PAPER-TREND] {sym} kapandı [{sebep}] PnL≈{net_pnl:+.2f}$ (sanal)\n"
+    tg(f"{'🟢' if net_pnl>=0 else '🔴'} [PAPER-YUKSELEN] {sym} kapandı [{sebep}] PnL≈{net_pnl:+.2f}$ (sanal)\n"
        f"Sanal bakiye: {yeni_bakiye:.2f}$")
 
 
@@ -505,19 +446,33 @@ def manage_loop():
                 if guncel <= 0:
                     continue
 
-                long_mu = durum.get("yon", "long") == "long"
-
                 if (time.time() - durum["acilis_zamani"]) > MAX_HOLD_SAAT * 3600:
                     sanal_pozisyon_kapat(sym, "max_hold_timeout")
                     continue
 
-                sl_tetiklendi = (guncel <= durum["sl"]) if long_mu else (guncel >= durum["sl"])
-                if sl_tetiklendi:
+                # ── v2 YENİ: ERKEN GÜVENLİK ÇIKIŞI (sürekli kontrol) ──
+                if ERKEN_GUVENLIK_CIKISI_AKTIF and not durum.get("erken_kontrol_yapildi", False):
+                    gecen_dk = (time.time() - durum["acilis_zamani"]) / 60
+                    ilerleme_pct = (guncel - durum["entry"]) / durum["entry"] * 100
+                    if gecen_dk < ERKEN_GUVENLIK_SURE_DK:
+                        if ilerleme_pct <= -ERKEN_GUVENLIK_MAX_ZARAR_PCT:
+                            sanal_pozisyon_kapat(sym, "erken_guvenlik_cikisi")
+                            continue
+                    else:
+                        if ilerleme_pct < ERKEN_GUVENLIK_MIN_ILERLEME_PCT:
+                            sanal_pozisyon_kapat(sym, "erken_guvenlik_cikisi")
+                            continue
+                        else:
+                            with state_lock:
+                                if sym in trade_state:
+                                    trade_state[sym]["erken_kontrol_yapildi"] = True
+                            durumu_diske_yaz()
+
+                if guncel <= durum["sl"]:
                     sanal_pozisyon_kapat(sym, "sl")
                     continue
 
-                tp_tetiklendi = (guncel >= durum["tp"]) if long_mu else (guncel <= durum["tp"])
-                if tp_tetiklendi:
+                if guncel >= durum["tp"]:
                     sanal_pozisyon_kapat(sym, "hedef")
                     continue
             time.sleep(5)
@@ -543,16 +498,15 @@ def ozet_yaz():
             guncel = safe(t["last"])
             entry = d["entry"]
             notional = d.get("notional", 0)
-            long_mu = d.get("yon", "long") == "long"
-            anlik = (guncel - entry) / entry * notional if long_mu else (entry - guncel) / entry * notional
+            anlik = (guncel - entry) / entry * notional
             gerceklesmeyen_net += anlik
             acik_detay.append((sym, anlik))
         except Exception:
             continue
 
     satirlar = [
-        "📈 PAPER TREND-UYUM BOTU — SANAL ÖZET",
-        "(GERÇEK PARA DEĞİL - simülasyon, 1D+4H+1H trend uyumu)",
+        "🚀 PAPER YÜKSELEN-COIN BOTU v2 (KORUMALI) — SANAL ÖZET",
+        "(GERÇEK PARA DEĞİL - simülasyon, en çok yükselen/volatil coin)",
         "━━━━━━━━━━━━━━━━━━━━",
         f"💼 Sanal bakiye: {bakiye:.2f}$ (başlangıç: {SANAL_BASLANGIC_BAKIYE:.0f}$)",
     ]
@@ -596,10 +550,8 @@ def panel_gecmis_metni():
     satirlar = ["📜 SON 15 İŞLEM (SANAL)\n"]
     for t in list(reversed(gecmis))[:15]:
         emoji = "🟢" if t["pnl"] >= 0 else "🔴"
-        yon_etiket = "LONG" if t.get("yon", "long") == "long" else "SHORT"
-        satirlar.append(f"{emoji} {t['symbol'].split('/')[0]} {yon_etiket} {t['pnl']:+.2f}$ "
-                         f"[{t.get('not','?')}]\n   {t['zaman']} | 1D:{t.get('1d','?')}/4H:{t.get('4h','?')}/1H:{t.get('1h','?')} "
-                         f"| güç:%{t.get('guc_4h','?')}")
+        satirlar.append(f"{emoji} {t['symbol'].split('/')[0]} LONG {t['pnl']:+.2f}$ "
+                         f"[{t.get('not','?')}]\n   {t['zaman']}")
     return "\n".join(satirlar)
 
 
@@ -614,13 +566,6 @@ def panel_analiz_metni():
         net = sum(t["pnl"] for t in alt)
         w = len([t for t in alt if t["pnl"] > 0])
         satirlar.append(f"  {sebep}: {len(alt)} işlem, %{w/len(alt)*100:.0f} kazanma, net {net:+.2f}$")
-
-    long_islem = [t for t in gecmis if t.get("yon") == "long"]
-    short_islem = [t for t in gecmis if t.get("yon") == "short"]
-    if long_islem:
-        satirlar.append(f"\n🟢 LONG: {len(long_islem)} işlem, net {sum(t['pnl'] for t in long_islem):+.2f}$")
-    if short_islem:
-        satirlar.append(f"🔴 SHORT: {len(short_islem)} işlem, net {sum(t['pnl'] for t in short_islem):+.2f}$")
 
     coin_pnl = {}
     for t in gecmis:
@@ -652,13 +597,11 @@ def panel_risk_metni():
             t = exchange.fetch_ticker(sym)
             guncel = safe(t["last"])
             entry = d["entry"]
-            long_mu = d.get("yon", "long") == "long"
-            yon_etiket = "LONG" if long_mu else "SHORT"
-            pnl_pct = (guncel - entry) / entry * 100 if long_mu else (entry - guncel) / entry * 100
+            pnl_pct = (guncel - entry) / entry * 100
             anlik_kar = pnl_pct / 100 * d.get("notional", 0)
             sure_dk = (time.time() - d["acilis_zamani"]) / 60
             kalan_dk = MAX_HOLD_SAAT * 60 - sure_dk
-            satirlar.append(f"{sym} {yon_etiket} (1D:{d.get('1d')}/4H:{d.get('4h')}/1H:{d.get('1h')}, güç:%{d.get('guc_4h','?')})\n"
+            satirlar.append(f"{sym} LONG\n"
                              f"  Giriş:{entry:.6f} Şimdi:{guncel:.6f} (%{pnl_pct:+.2f})\n"
                              f"  Anlık PnL: {anlik_kar:+.2f}$ | SL:{d['sl']:.6f} | TP:{d.get('tp',0):.6f}\n"
                              f"  Açık süre: {sure_dk:.0f} dk | Max tutmaya kalan: {max(0,kalan_dk):.0f} dk")
@@ -670,49 +613,51 @@ def panel_risk_metni():
 def panel_ayarlar_metni():
     with bakiye_lock:
         bakiye = sanal_bakiye["deger"]
-    return ("⚙️ PAPER TREND-UYUM BOTU AYARLARI (SANAL PARA)\n\n"
+    return ("⚙️ PAPER YÜKSELEN-COIN BOTU v2 - KORUMALI (SANAL PARA)\n\n""Bu bot, orijinal (korumasız) paper_yukselen_bot.py ile PARALEL çalışır - amaç A/B karşılaştırması. Zirveden mesafe filtresi + erken güvenlik çıkışı eklenmiş hali (canlı bot v4.1/v4.2'de doğrulanmış).\n\n"
             "⚠️ Bu bot GERÇEK PARA KULLANMAZ - tüm işlemler sanaldır.\n\n"
             f"Sanal bakiye: {bakiye:.2f}$ (başlangıç: {SANAL_BASLANGIC_BAKIYE:.0f}$)\n"
             f"İşlem büyüklüğü: sabit ${SANAL_ISLEM_BUYUKLUGU_USDT:.0f}, {LEV}x kaldıraç\n"
             f"MAX_POS: {MAX_POS}\n\n"
-            "Strateji: Çoklu zaman dilimi trend uyumu (1D+4H+1H)\n"
-            f"  1) 1D, 4H, 1H üçü de AYNI yönde olmalı ({'LONG+SHORT' if SHORT_AKTIF else 'LONG-only'})\n"
-            f"  2) 4H trend gücü en az %{MIN_4H_TREND_GUCU_PCT:.1f} olmalı\n"
-            f"  3) 15m'de swing dip/tepe + dönüş onayı, en fazla %{GIRIS_MAX_MESAFE_PCT*100:.0f} uzaklık\n"
-            f"  4) Hacim, {HACIM_TEYIT_PERIYOT} mum ortalamasının en az {HACIM_TEYIT_KATSAYI}x'i olmalı\n\n"
-            "Çıkış (backtest'te en kararlı sonucu veren sabit oranlar):\n"
+            f"Strateji: Günün en çok yükseleni/en volatili ({SIRALAMA_TIPI} bazlı)\n"
+            f"  1) Tüm likit coinler arasında son 24s getirisi üst "
+            f"%{(1-UST_YUZDELIK)*100:.0f}'luk dilimde olmalı\n"
+            f"  2) Son 15m mum hacmi, {HACIM_TEYIT_PERIYOT} mum ortalamasının "
+            f"en az {HACIM_TEYIT_KATSAYI}x'i olmalı\n"
+            f"  3) Son mum yükselen kapanışlı olmalı (close > open)\n\n"
+            "Çıkış (backtest'te en iyi/en kararlı sonucu veren):\n"
             f"  TP: sabit %{HEDEF_PCT*100:.0f}\n"
             f"  SL: sabit %{SL_PCT*100:.0f}\n"
             f"  Max tutma: {MAX_HOLD_SAAT:.0f} saat\n\n"
             "📊 BU STRATEJİNİN GEÇMİŞİ: 136 coin, ~51 günlük gerçek Bitget "
-            "verisinde büyük ölçekli backtest edildi (~940 işlem), net "
-            "+1706$ (sabit $100/işlem, 10x kaldıraç varsayımıyla). Komşu "
-            "parametrelerde (TP/SL %4-8, güç eşiği %0.5-4) istikrarlı "
-            "şekilde pozitif kaldı - bu, önceden denenen (likidite avı, "
-            "fonlama oranı) stratejilerin gösterdiği kırılganlıktan farklı.\n\n"
-            "⚠️ Bu geçmiş performans gelecekteki sonuçları garanti etmez - "
-            "tek bir 51 günlük dönem test edildi. Bu yüzden gerçek para "
-            "değil, sanal ortamda canlı test ediliyor.")
+            "verisinde büyük ölçekli backtest edildi (2283 işlem), net "
+            "+7254$ (sabit $100/işlem, 10x kaldıraç varsayımıyla). Eşik "
+            "yüzdeliği %80-95 ve TP/SL %4-7 arasında denendi, HER "
+            "KOMBİNASYONDA pozitif kaldı - kararlı bir sonuç.\n\n"
+            "⚠️ Bu geçmiş performans gelecekteki sonuçları garanti etmez. "
+            "Bu yüzden gerçek para değil, sanal ortamda canlı test ediliyor.\n\n"
+            "🔄 DİNAMİK DAVRANIŞ: Bot her turda TÜM coin havuzunu yeniden "
+            "sıralar - sabit bir coin listesine takılı kalmaz, o anda en "
+            "çok yükselen/volatil olan coinlere yönelir.")
 
 
 def ana_menu_klavye():
     markup = telebot.types.InlineKeyboardMarkup()
     markup.row(
-        telebot.types.InlineKeyboardButton("📊 Özet", callback_data="pt_ozet"),
-        telebot.types.InlineKeyboardButton("⚙️ Ayarlar", callback_data="pt_ayarlar"),
+        telebot.types.InlineKeyboardButton("📊 Özet", callback_data="py_ozet"),
+        telebot.types.InlineKeyboardButton("⚙️ Ayarlar", callback_data="py_ayarlar"),
     )
     markup.row(
-        telebot.types.InlineKeyboardButton("📜 Geçmiş", callback_data="pt_gecmis"),
-        telebot.types.InlineKeyboardButton("🔬 Analiz", callback_data="pt_analiz"),
+        telebot.types.InlineKeyboardButton("📜 Geçmiş", callback_data="py_gecmis"),
+        telebot.types.InlineKeyboardButton("🔬 Analiz", callback_data="py_analiz"),
     )
-    markup.row(telebot.types.InlineKeyboardButton("📉 Açık Pozisyon Detayı", callback_data="pt_risk"))
-    markup.row(telebot.types.InlineKeyboardButton("🔄 Yenile", callback_data="pt_ana"))
+    markup.row(telebot.types.InlineKeyboardButton("📉 Açık Pozisyon Detayı", callback_data="py_risk"))
+    markup.row(telebot.types.InlineKeyboardButton("🔄 Yenile", callback_data="py_ana"))
     return markup
 
 
 def geri_butonu():
     markup = telebot.types.InlineKeyboardMarkup()
-    markup.row(telebot.types.InlineKeyboardButton("⬅️ Menüye Dön", callback_data="pt_ana"))
+    markup.row(telebot.types.InlineKeyboardButton("⬅️ Menüye Dön", callback_data="py_ana"))
     return markup
 
 
@@ -733,7 +678,7 @@ if bot:
             return
         bot.send_message(msg.chat.id, panel_ozet_metni(), reply_markup=ana_menu_klavye())
 
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("pt_"))
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("py_"))
     def panel_buton_yaniti(call):
         if not yetkili_mi(call):
             try: bot.answer_callback_query(call.id)
@@ -741,17 +686,17 @@ if bot:
             return
         veri = call.data
         try:
-            if veri == "pt_ana":
+            if veri == "py_ana":
                 bot.edit_message_text(panel_ozet_metni(), call.message.chat.id, call.message.message_id, reply_markup=ana_menu_klavye())
-            elif veri == "pt_ozet":
+            elif veri == "py_ozet":
                 bot.edit_message_text(panel_ozet_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
-            elif veri == "pt_ayarlar":
+            elif veri == "py_ayarlar":
                 bot.edit_message_text(panel_ayarlar_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
-            elif veri == "pt_gecmis":
+            elif veri == "py_gecmis":
                 bot.edit_message_text(panel_gecmis_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
-            elif veri == "pt_analiz":
+            elif veri == "py_analiz":
                 bot.edit_message_text(panel_analiz_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
-            elif veri == "pt_risk":
+            elif veri == "py_risk":
                 bot.edit_message_text(panel_risk_metni(), call.message.chat.id, call.message.message_id, reply_markup=geri_butonu())
             bot.answer_callback_query(call.id)
         except Exception as e:
@@ -807,19 +752,20 @@ def telebot_polling_baslat():
 
 
 def tarama_loop():
-    tg(f"📈 PAPER TREND-UYUM BOTU v1.0 başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"
+    tg(f"🚀 PAPER YÜKSELEN-COIN BOTU v2 (KORUMALI) başladı — SANAL PARA (gerçek işlem AÇILMAZ)\n"f"Orijinal (korumasız) bot ile PARALEL çalışıyor - A/B karşılaştırması için.\n"f"Ek korumalar: zirveden mesafe filtresi (%{ZIRVEDEN_MIN_MESAFE_PCT*100:.1f}) + "f"erken güvenlik çıkışı (ilk {ERKEN_GUVENLIK_SURE_DK:.0f} dk, %{ERKEN_GUVENLIK_MAX_ZARAR_PCT:.1f})\n\n"
        f"Sanal bakiye: {SANAL_BASLANGIC_BAKIYE:.0f}$ | İşlem büyüklüğü: sabit {SANAL_ISLEM_BUYUKLUGU_USDT:.0f}$ ({LEV}x)\n"
        f"MAX_POS={MAX_POS}\n\n"
-       f"Strateji: 1D+4H+1H trend uyumu + hacim teyidi + swing dip/tepe girişi\n"
-       f"  Trend gücü eşiği: %{MIN_4H_TREND_GUCU_PCT:.1f}\n"
-       f"  Sabit TP: %{HEDEF_PCT*100:.0f} | Sabit SL: %{SL_PCT*100:.0f}\n"
-       f"  Max tutma: {MAX_HOLD_SAAT:.0f} saat\n\n"
-       f"📊 Bu strateji, 136 coin/~51 gün gerçek veride büyük ölçekli "
-       f"backtest edildi (~940 işlem, net +1706$) - önceki denenen "
-       f"stratejilerden (likidite avı, fonlama oranı - ikisi de net "
-       f"zararlıydı) farklı olarak, komşu parametrelerde İSTİKRARLI "
-       f"pozitif sonuç verdi. Yine de gerçek para değil, sanal ortamda "
-       f"canlı test ediliyor - geçmiş performans garanti değildir.\n\n"
+       f"Strateji: Günün en çok yükseleni ({SIRALAMA_TIPI} bazlı, üst %{(1-UST_YUZDELIK)*100:.0f}) "
+       f"+ hacim teyidi + yükselen kapanış\n"
+       f"Sabit TP: %{HEDEF_PCT*100:.0f} | Sabit SL: %{SL_PCT*100:.0f} | Max tutma: {MAX_HOLD_SAAT:.0f} saat\n\n"
+       f"📊 136 coin/~51 gün gerçek veride backtest: 2283 işlem, net "
+       f"+7254$. Eşik ve TP/SL aralığında (%80-95, %4-7) İSTİKRARLI "
+       f"pozitif kaldı.\n"
+       f"🔄 Bot her turda TÜM coin havuzunu yeniden sıralar - sabit bir "
+       f"coin listesine takılı kalmaz, o anda en çok yükselen/volatil "
+       f"olan coinlere yönelir.\n\n"
+       f"⚠️ Geçmiş performans garanti değildir - sanal ortamda test "
+       f"ediliyor.\n\n"
        f"📱 /panel yaz — tam menüyü görürsün.")
 
     while True:
@@ -830,7 +776,7 @@ def tarama_loop():
                 time.sleep(KONTROL_ARALIGI_SN)
                 continue
 
-            adaylar = aday_havuzu()
+            adaylar = aday_havuzu_siralanmis()
             taranacaklar = []
             for sym in adaylar:
                 with state_lock:
@@ -843,7 +789,7 @@ def tarama_loop():
             bulunan = 0
             if taranacaklar:
                 with ThreadPoolExecutor(max_workers=4) as havuz:
-                    gelecekler = {havuz.submit(ucyon_sinyal, sym): sym for sym in taranacaklar}
+                    gelecekler = {havuz.submit(giris_sinyali, sym): sym for sym in taranacaklar}
                     for gelecek in as_completed(gelecekler):
                         sym = gelecekler[gelecek]
                         try:
@@ -858,7 +804,7 @@ def tarama_loop():
                             sanal_pozisyon_ac(sinyal)
                             bulunan += 1
 
-            log.info(f"[NABIZ] tur tamam | havuz={len(adaylar)} | bulunan={bulunan} | "
+            log.info(f"[NABIZ] tur tamam | üst_dilim={len(adaylar)} | bulunan={bulunan} | "
                      f"acik={MAX_POS-bos_slot}/{MAX_POS}")
             time.sleep(KONTROL_ARALIGI_SN)
         except Exception as e:
@@ -867,7 +813,7 @@ def tarama_loop():
 
 
 if __name__ == "__main__":
-    print("PAPER TREND-UYUM BOTU v1.0 BAŞLIYOR... (SANAL PARA, GERÇEK İŞLEM YOK)")
+    print("PAPER YÜKSELEN-COIN BOTU v2 KORUMALI BAŞLIYOR... (SANAL PARA, GERÇEK İŞLEM YOK)")
     durumu_diskten_yukle()
     cooldown_diskten_yukle()
     bakiye_diskten_yukle()
